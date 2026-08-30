@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/patient_profile_service.dart';
 import '../services/vital_repository.dart';
 import '../services/nutrition_service.dart';
@@ -23,7 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final VitalRepository _vitalRepo = VitalRepository();
   final NutritionService _nutritionService = NutritionService();
 
-  // 🎨 Palette สีหลักตาม Design System
+  // 🎨 Design System: Warm Cream & Earthy Palette
   static const Color creamBgColor = Color(0xFFFFF8F0);
   static const Color primaryTextColor = Color(0xFF4A3833);
   static const Color secondaryTextColor = Color(0xFF8A7568);
@@ -36,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _avgSys7Days = 0;
   double _avgDia7Days = 0;
   bool _hasVitalData = false;
-  int _streakDays = 1;
+  int _streakDays = 0;
 
   Map<String, dynamic>? _profileData;
   List<Map<String, dynamic>> _todayFoodLogs = [];
@@ -45,46 +46,87 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadDashboardData();
-    // 🛡️ แสดง Pop-up Medical Disclaimer อัตโนมัติเมื่อโหลดหน้า Dashboard เข้ามา
+
+    // 🛡️ แสดง Pop-up ข้อกำหนดทางการแพทย์เมื่อเปิดหน้าแรก
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showMedicalDisclaimerDialog();
     });
   }
 
+  // 🔄 ฟังก์ชันดึงข้อมูลแดชบอร์ดแบบ Robust (รองรับทั้งช่วง 7 วัน และประวัติล่าสุด)
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final patientId = await _profileService.getCurrentPatientId();
+      // 1. ดึง Patient ID (ค้นหาจากหลายแหล่งเพื่อความแม่นยำ)
+      String? patientId = await _profileService.getCurrentPatientId();
       final profile = await _profileService.getProfile();
       _profileData = profile;
 
-      if (profile != null) {
-        _patientName = profile['first_name'] ?? profile['name'] ?? "ผู้ใช้งาน";
+      if (patientId == null || patientId.isEmpty) {
+        patientId = profile?['id']?.toString() ??
+            Supabase.instance.client.auth.currentUser?.id;
       }
 
+      if (profile != null) {
+        _patientName = profile['first_name'] ??
+            profile['name'] ??
+            profile['fullName'] ??
+            "ผู้ใช้งาน";
+      }
+
+      // 2. ดึงข้อมูลสัญญาณชีพความดันโลหิต
       if (patientId != null && patientId.isNotEmpty) {
-        final vitals = await _vitalRepo.getLast7Days(patientId);
+        List<Map<String, dynamic>> vitals =
+            await _vitalRepo.getLast7Days(patientId);
+
+        // หาก 7 วันล่าสุดยังไม่มี ให้ดึงประวัติล่าสุด 1 เดือนมาแสดงแทน
+        if (vitals.isEmpty) {
+          vitals = await _vitalRepo.getLast1Month(patientId);
+        }
+
         if (vitals.isNotEmpty) {
           _hasVitalData = true;
           _streakDays = vitals.length;
+
           double sumSys = 0;
           double sumDia = 0;
+          int validCount = 0;
+
           for (var v in vitals) {
-            sumSys += (v['systolic'] as num?)?.toDouble() ?? 0;
-            sumDia += (v['diastolic'] as num?)?.toDouble() ?? 0;
+            final sys = (v['systolic'] as num?)?.toDouble() ??
+                (v['systolic_bp'] as num?)?.toDouble() ??
+                (v['sys'] as num?)?.toDouble();
+            final dia = (v['diastolic'] as num?)?.toDouble() ??
+                (v['diastolic_bp'] as num?)?.toDouble() ??
+                (v['dia'] as num?)?.toDouble();
+
+            if (sys != null && dia != null && sys > 0 && dia > 0) {
+              sumSys += sys;
+              sumDia += dia;
+              validCount++;
+            }
           }
-          _avgSys7Days = sumSys / vitals.length;
-          _avgDia7Days = sumDia / vitals.length;
+
+          if (validCount > 0) {
+            _avgSys7Days = sumSys / validCount;
+            _avgDia7Days = sumDia / validCount;
+          }
+        } else {
+          _hasVitalData = false;
+          _avgSys7Days = 0;
+          _avgDia7Days = 0;
+          _streakDays = 0;
         }
 
+        // 3. ดึงประวัติอาหารวันนี้
         try {
           _todayFoodLogs = await _nutritionService.getTodayFoodLogs(patientId);
         } catch (e) {
-          debugPrint('Error loading today food logs: $e');
+          debugPrint('Food logs load error: $e');
         }
       }
     } catch (e) {
-      debugPrint('Error loading dashboard: $e');
+      debugPrint('Error loading dashboard data: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -128,7 +170,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 22),
+                    Icon(Icons.info_outline,
+                        color: Color(0xFFB45309), size: 22),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -145,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                '• วัตถุประสงค์: พัฒนาขึ้นเพื่อการบันทึก รวบรวม และติดตามแนวโน้มภาวะสุขภาพเบื้องต้นของผู้ป่วยโรคไม่ติดต่อเรื้อรัง (NCDs) เท่านั้น\n\n'
+                '• วัตถุประสงค์: พัฒนาขึ้นเพื่อการบันทึกและติดตามแนวโน้มภาวะสุขภาพเบื้องต้นของผู้ป่วยโรคไม่ติดต่อเรื้อรัง (NCDs) เท่านั้น\n\n'
                 '• การตัดสินใจรักษา: ข้อมูลและคำแนะนำจากระบบ AI ไม่มีผลต่อการวินิจฉัยทางการแพทย์ การปรับเปลี่ยนขนาด หรือการรักษาต้องอยู่ภายใต้ดุลยพินิจของแพทย์ผู้เชี่ยวชาญเท่านั้น\n\n'
                 '• ภาวะฉุกเฉิน: หากมีอาการวิกฤต เจ็บแน่นหน้าอก หรือความดันโลหิตสูงรุนแรง กรุณาติดต่อสถานพยาบาลใกล้บ้านหรือโทร 1669 ทันที',
                 style: TextStyle(
@@ -236,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.logout_rounded, color: Color(0xFFD85A30)),
+            Icon(Icons.logout, color: Color(0xFFD85A30)),
             SizedBox(width: 8),
             Text(
               'ออกจากระบบ',
@@ -254,7 +297,8 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
+            child:
+                const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -278,7 +322,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 debugPrint('Logout error: $e');
               }
             },
-            child: const Text('ออกจากระบบ', style: TextStyle(color: Colors.white)),
+            child:
+                const Text('ออกจากระบบ', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -291,6 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: creamBgColor,
       body: Stack(
         children: [
+          // วงกลมตกแต่งด้านบน
           Positioned(
             top: -80,
             right: -80,
@@ -308,125 +354,155 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: emeraldTheme),
                   )
-                : SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 🌟 ส่วน Header พร้อมแถบ Credit ชื่อผู้พัฒนา
-                        _buildHeaderSection(),
-                        const SizedBox(height: 18),
+                : RefreshIndicator(
+                    color: emeraldTheme,
+                    onRefresh: _loadDashboardData,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 🕒 Header + Credit ผู้พัฒนา
+                          _buildHeaderSection(),
+                          const SizedBox(height: 18),
 
-                        // 🌱 แบนเนอร์ต้นไม้สุขภาพ
-                        _buildHealthTreeBanner(),
-                        const SizedBox(height: 18),
+                          // 🌱 แบนเนอร์ต้นไม้สุขภาพ (Streak Tree Banner)
+                          _buildHealthTreeBanner(),
+                          const SizedBox(height: 18),
 
-                        // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
-                        _buildHealthIndicatorCard(),
-                        const SizedBox(height: 26),
+                          // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
+                          _buildHealthIndicatorCard(),
+                          const SizedBox(height: 26),
 
-                        // 🧱 เมนูบริการ 2 คอลัมน์
-                        const Text(
-                          'เมนูบริการสุขภาพ',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.bold,
-                            color: primaryTextColor,
+                          // 🧱 เมนูบริการ 2 คอลัมน์ (พร้อมไอคอนคมชัด)
+                          const Text(
+                            'เมนูบริการสุขภาพ',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                              color: primaryTextColor,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
+                          const SizedBox(height: 14),
 
-                        GridView.count(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 0.96,
-                          children: [
-                            _buildMenuCard(
-                              title: 'บันทึกความดัน',
-                              subtitle: 'พิมพ์ค่าความดัน / ถ่ายรูปจอ LCD',
-                              imagePath: 'assets/images/menu_bp.jpg',
-                              icon: Icons.monitor_heart_rounded,
-                              barColor: const Color(0xFF2F9E82),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const VitalSignRecordScreen(),
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 0.96,
+                            children: [
+                              // 1. บันทึกความดัน
+                              _buildMenuCard(
+                                title: 'บันทึกความดัน',
+                                subtitle: 'พิมพ์ค่าความดัน / ถ่ายรูปจอ LCD',
+                                imagePath: 'assets/images/menu_bp.jpg',
+                                icon: Icons.favorite,
+                                barColor: const Color(0xFF2F9E82),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const VitalSignRecordScreen(),
+                                    ),
+                                  );
+                                  _loadDashboardData();
+                                },
+                              ),
+
+                              // 2. ห้องยาประจำตัว
+                              _buildMenuCard(
+                                title: 'ห้องยาประจำตัว',
+                                subtitle: 'สแกนฉลากยา & ตั้งเตือนทานยา',
+                                imagePath: 'assets/images/menu_drug.jpg',
+                                icon: Icons.medication,
+                                barColor: const Color(0xFFE8A33D),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const MedicationHistoryScreen(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            _buildMenuCard(
-                              title: 'ห้องยาประจำตัว',
-                              subtitle: 'สแกนฉลากยา & ตั้งเตือนทานยา',
-                              imagePath: 'assets/images/menu_drug.jpg',
-                              icon: Icons.medication_rounded,
-                              barColor: const Color(0xFFE8A33D),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const MedicationHistoryScreen(),
+
+                              // 3. อาหาร & กิจกรรม
+                              _buildMenuCard(
+                                title: 'อาหาร & กิจกรรม',
+                                subtitle: 'พิมพ์บันทึกอาหาร / ถ่ายรูปมื้ออาหาร',
+                                imagePath: 'assets/images/menu_fd.jpg',
+                                icon: Icons.restaurant,
+                                barColor: const Color(0xFFD97B4F),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const NutritionScreen(),
+                                    ),
+                                  );
+                                  _loadDashboardData();
+                                },
+                              ),
+
+                              // 4. ปรึกษาหมอ AI
+                              _buildMenuCard(
+                                title: 'ปรึกษาหมอ AI',
+                                subtitle: 'ถามตอบอิง HT Guideline 2567',
+                                imagePath: 'assets/images/menu_ai.jpg',
+                                icon: Icons.chat,
+                                barColor: const Color(0xFF4C8FA6),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const HtConsultScreen(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            _buildMenuCard(
-                              title: 'อาหาร & กิจกรรม',
-                              subtitle: 'พิมพ์บันทึกอาหาร / ถ่ายรูปมื้ออาหาร',
-                              imagePath: 'assets/images/menu_fd.jpg',
-                              icon: Icons.restaurant_menu_rounded,
-                              barColor: const Color(0xFFD97B4F),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const NutritionScreen(),
+
+                              // 5. สมุดสุขภาพ
+                              _buildMenuCard(
+                                title: 'สมุดสุขภาพ',
+                                subtitle: 'ดูกราฟ 7 วัน & ประวัติความเสี่ยง',
+                                imagePath: 'assets/images/menu_graph.jpg',
+                                icon: Icons.bar_chart,
+                                barColor: const Color(0xFF6B9E5C),
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const HealthHistoryScreen(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            _buildMenuCard(
-                              title: 'ปรึกษาหมอ AI',
-                              subtitle: 'ถามตอบอิง HT Guideline 2567',
-                              imagePath: 'assets/images/menu_ai.jpg',
-                              icon: Icons.chat_bubble_rounded,
-                              barColor: const Color(0xFF4C8FA6),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const HtConsultScreen(),
-                                ),
+
+                              // 6. ข้อมูลของฉัน
+                              _buildMenuCard(
+                                title: 'ข้อมูลของฉัน',
+                                subtitle: 'คำนวณ TDEE & คัดกรองโรค',
+                                imagePath: 'assets/images/menu_risk.jpg',
+                                icon: Icons.person,
+                                barColor: const Color(0xFFB37B57),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const PatientProfileScreen(),
+                                    ),
+                                  );
+                                  _loadDashboardData();
+                                },
                               ),
-                            ),
-                            _buildMenuCard(
-                              title: 'สมุดสุขภาพ',
-                              subtitle: 'ดูกราฟ 7 วัน & ประวัติความเสี่ยง',
-                              imagePath: 'assets/images/menu_graph.jpg',
-                              icon: Icons.bar_chart_rounded,
-                              barColor: const Color(0xFF6B9E5C),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const HealthHistoryScreen(),
-                                ),
-                              ),
-                            ),
-                            _buildMenuCard(
-                              title: 'ข้อมูลของฉัน',
-                              subtitle: 'คำนวณ TDEE & คัดกรองโรค',
-                              imagePath: 'assets/images/menu_risk.jpg',
-                              icon: Icons.person_pin_rounded,
-                              barColor: const Color(0xFFB37B57),
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const PatientProfileScreen(),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 36),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 36),
+                        ],
+                      ),
                     ),
                   ),
           ),
@@ -440,7 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 🎖️ แถบ Credit มุมบนขวา
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -457,7 +532,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified_user_rounded, color: emeraldTheme, size: 14),
+                  Icon(Icons.verified, color: emeraldTheme, size: 14),
                   SizedBox(width: 6),
                   Text(
                     'Chaiyaphod Laochumni (RN Developer)',
@@ -474,7 +549,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         const SizedBox(height: 8),
-
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -534,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: IconButton(
                 onPressed: _handleLogout,
                 icon: const Icon(
-                  Icons.logout_rounded,
+                  Icons.logout,
                   color: Color(0xFFD85A30),
                   size: 20,
                 ),
@@ -547,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🌱 Widget แบนเนอร์ต้นไม้สุขภาพ
+  // 🌱 Widget แบนเนอร์ต้นไม้สุขภาพ (Streak Banner)
   Widget _buildHealthTreeBanner() {
     return Container(
       width: double.infinity,
@@ -569,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
               shape: BoxShape.circle,
             ),
             child: const Icon(
-              Icons.park_rounded,
+              Icons.park,
               color: Color(0xFF4C7A3F),
               size: 26,
             ),
@@ -590,7 +664,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _hasVitalData
-                      ? 'บันทึกต่อเนื่อง $_streakDays วันแล้ว ต้นไม้กำลังเติบโตแข็งแรงค่ะ 🌱'
+                      ? 'บันทึกสะสม $_streakDays รายการแล้ว ต้นไม้กำลังเติบโตแข็งแรงค่ะ 🌱'
                       : 'เริ่มบันทึกสุขภาพวันนี้ เพื่อให้ต้นไม้เริ่มเติบโตกันนะคะ 🌱',
                   style: const TextStyle(
                     fontSize: 12,
@@ -606,7 +680,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 📊 Widget การ์ดสรุปความดัน 7 วัน
+  // 📊 Widget การ์ดสรุปความดัน 7 วันล่าสุด
   Widget _buildHealthIndicatorCard() {
     final int sys = _avgSys7Days.round();
     final int dia = _avgDia7Days.round();
@@ -683,7 +757,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 child: Icon(
                   feedback.iconData,
-                  size: 34,
+                  size: 30,
                   color: feedback.themeColor,
                 ),
               ),
@@ -704,7 +778,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.lightbulb_circle_rounded,
+                  Icons.lightbulb,
                   size: 22,
                   color: feedback.themeColor,
                 ),
@@ -742,7 +816,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🖼️ Widget การ์ดเมนู
+  // 🖼️ Widget การ์ดเมนู (ใช้ไอคอน Base Font แสดงผลคมชัด 100%)
   Widget _buildMenuCard({
     required String title,
     required String subtitle,
@@ -800,7 +874,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(7),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.white, size: 20),
@@ -811,7 +885,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 left: 0,
                 right: 0,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: barColor.withValues(alpha: 0.92),
                     borderRadius: const BorderRadius.only(
@@ -887,8 +962,9 @@ class HealthFeedbackEvaluator {
     if (!hasData) {
       return HealthFeedbackModel(
         statusTitle: 'ยังไม่มีข้อมูลความดัน',
-        adviceText: 'แนะนำวัดความดันช่วงเช้า (หลังตื่นนอน) อย่างน้อยวันละ 1 ครั้งค่ะ',
-        iconData: Icons.add_chart_rounded,
+        adviceText:
+            'แนะนำวัดความดันช่วงเช้า (หลังตื่นนอน) อย่างน้อยวันละ 1 ครั้งค่ะ',
+        iconData: Icons.add_chart,
         themeColor: const Color(0xFF2F9E82),
         bgColor: const Color(0xFFECFDF5),
       );
@@ -947,7 +1023,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'วิกฤติ! ต้องพบแพทย์',
           adviceText: actionAdvice,
-          iconData: Icons.warning_amber_rounded,
+          iconData: Icons.warning,
           themeColor: const Color(0xFFEF4444),
           bgColor: const Color(0xFFFEF2F2),
         );
@@ -955,7 +1031,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'ความดันระดับสูง',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_dissatisfied_rounded,
+          iconData: Icons.sentiment_dissatisfied,
           themeColor: const Color(0xFFF97316),
           bgColor: const Color(0xFFFFF7ED),
         );
@@ -963,7 +1039,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'เฝ้าระวัง (ค่อนข้างสูง)',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_neutral_rounded,
+          iconData: Icons.sentiment_neutral,
           themeColor: const Color(0xFFEAB308),
           bgColor: const Color(0xFFFEFCE8),
         );
@@ -972,7 +1048,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'ความดันปกติ (ดีเยี่ยม)',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_very_satisfied_rounded,
+          iconData: Icons.sentiment_very_satisfied,
           themeColor: const Color(0xFF2F9E82),
           bgColor: const Color(0xFFECFDF5),
         );
