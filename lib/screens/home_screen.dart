@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/patient_profile_service.dart';
-import '../services/vital_repository.dart';
-import '../services/nutrition_service.dart';
+import '../services/auth_service.dart';
 import 'vital_sign_record_screen.dart';
 import 'health_history_screen.dart';
 import 'patient_profile_screen.dart';
 import 'medication_history_screen.dart';
 import 'nutrition_screen.dart';
 import 'ht_consult_screen.dart';
-import '../services/auth_service.dart';
 import 'login_page.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,10 +19,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PatientProfileService _profileService = PatientProfileService();
-  final VitalRepository _vitalRepo = VitalRepository();
-  final NutritionService _nutritionService = NutritionService();
 
-  // 🎨 Design System: Warm Cream & Earthy Palette
+  // 🎨 Palette สีหลักตาม Design System
   static const Color creamBgColor = Color(0xFFFFF8F0);
   static const Color primaryTextColor = Color(0xFF4A3833);
   static const Color secondaryTextColor = Color(0xFF8A7568);
@@ -37,34 +33,34 @@ class _HomeScreenState extends State<HomeScreen> {
   double _avgSys7Days = 0;
   double _avgDia7Days = 0;
   bool _hasVitalData = false;
-  int _streakDays = 0;
+  int _recordCount = 0;
 
   Map<String, dynamic>? _profileData;
-  List<Map<String, dynamic>> _todayFoodLogs = [];
 
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
 
-    // 🛡️ แสดง Pop-up ข้อกำหนดทางการแพทย์เมื่อเปิดหน้าแรก
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showMedicalDisclaimerDialog();
     });
   }
 
-  // 🔄 ฟังก์ชันดึงข้อมูลแดชบอร์ดแบบ Robust (รองรับทั้งช่วง 7 วัน และประวัติล่าสุด)
+  // 🔄 ดึงข้อมูลผู้ป่วยและสัญญาณชีพโดยตรงจากฐานข้อมูล (Direct Supabase Query)
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      // 1. ดึง Patient ID (ค้นหาจากหลายแหล่งเพื่อความแม่นยำ)
-      String? patientId = await _profileService.getCurrentPatientId();
+      final supabase = Supabase.instance.client;
+      final user = supabase.auth.currentUser;
+
+      // 1. โหลดข้อมูลโปรไฟล์ผู้ป่วย
       final profile = await _profileService.getProfile();
       _profileData = profile;
 
+      String? patientId = await _profileService.getCurrentPatientId();
       if (patientId == null || patientId.isEmpty) {
-        patientId = profile?['id']?.toString() ??
-            Supabase.instance.client.auth.currentUser?.id;
+        patientId = profile?['id']?.toString() ?? user?.id;
       }
 
       if (profile != null) {
@@ -74,65 +70,76 @@ class _HomeScreenState extends State<HomeScreen> {
             "ผู้ใช้งาน";
       }
 
-      // 2. ดึงข้อมูลสัญญาณชีพความดันโลหิต
+      // 2. ดึงรายการความดันล่าสุดจากตาราง vital_signs แบบเดียวกับหน้า HealthHistory
+      List<dynamic> vitals = [];
       if (patientId != null && patientId.isNotEmpty) {
-        List<Map<String, dynamic>> vitals =
-            await _vitalRepo.getLast7Days(patientId);
-
-        // หาก 7 วันล่าสุดยังไม่มี ให้ดึงประวัติล่าสุด 1 เดือนมาแสดงแทน
-        if (vitals.isEmpty) {
-          vitals = await _vitalRepo.getLast1Month(patientId);
-        }
-
-        if (vitals.isNotEmpty) {
-          _hasVitalData = true;
-          _streakDays = vitals.length;
-
-          double sumSys = 0;
-          double sumDia = 0;
-          int validCount = 0;
-
-          for (var v in vitals) {
-            final sys = (v['systolic'] as num?)?.toDouble() ??
-                (v['systolic_bp'] as num?)?.toDouble() ??
-                (v['sys'] as num?)?.toDouble();
-            final dia = (v['diastolic'] as num?)?.toDouble() ??
-                (v['diastolic_bp'] as num?)?.toDouble() ??
-                (v['dia'] as num?)?.toDouble();
-
-            if (sys != null && dia != null && sys > 0 && dia > 0) {
-              sumSys += sys;
-              sumDia += dia;
-              validCount++;
-            }
-          }
-
-          if (validCount > 0) {
-            _avgSys7Days = sumSys / validCount;
-            _avgDia7Days = sumDia / validCount;
-          }
-        } else {
-          _hasVitalData = false;
-          _avgSys7Days = 0;
-          _avgDia7Days = 0;
-          _streakDays = 0;
-        }
-
-        // 3. ดึงประวัติอาหารวันนี้
         try {
-          _todayFoodLogs = await _nutritionService.getTodayFoodLogs(patientId);
+          final res = await supabase
+              .from('vital_signs')
+              .select('*')
+              .eq('patient_id', patientId)
+              .order('recorded_at', ascending: false)
+              .limit(14);
+          vitals = res as List<dynamic>;
         } catch (e) {
-          debugPrint('Food logs load error: $e');
+          debugPrint('Query by patient_id failed, trying auth_user_id: $e');
         }
       }
+
+      // Fallback: ดึงด้วย auth_user_id หาก patient_id ยังไม่มี
+      if (vitals.isEmpty && user != null) {
+        try {
+          final res = await supabase
+              .from('vital_signs')
+              .select('*')
+              .eq('auth_user_id', user.id)
+              .order('recorded_at', ascending: false)
+              .limit(14);
+          vitals = res as List<dynamic>;
+        } catch (_) {}
+      }
+
+      // 3. ประมวลผลค่าเฉลี่ย
+      if (vitals.isNotEmpty) {
+        _hasVitalData = true;
+        _recordCount = vitals.length;
+
+        double sumSys = 0;
+        double sumDia = 0;
+        int validCount = 0;
+
+        for (var v in vitals) {
+          final sys = (v['systolic'] as num?)?.toDouble() ??
+              (v['systolic_bp'] as num?)?.toDouble() ??
+              (v['sys'] as num?)?.toDouble();
+          final dia = (v['diastolic'] as num?)?.toDouble() ??
+              (v['diastolic_bp'] as num?)?.toDouble() ??
+              (v['dia'] as num?)?.toDouble();
+
+          if (sys != null && dia != null && sys > 0 && dia > 0) {
+            sumSys += sys;
+            sumDia += dia;
+            validCount++;
+          }
+        }
+
+        if (validCount > 0) {
+          _avgSys7Days = sumSys / validCount;
+          _avgDia7Days = sumDia / validCount;
+        }
+      } else {
+        _hasVitalData = false;
+        _avgSys7Days = 0;
+        _avgDia7Days = 0;
+        _recordCount = 0;
+      }
     } catch (e) {
-      debugPrint('Error loading dashboard data: $e');
+      debugPrint('Error loading dashboard: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // 🛡️ Pop-up ข้อจำกัดความรับผิดชอบทางการแพทย์ (Medical Disclaimer)
   void _showMedicalDisclaimerDialog() {
     showDialog(
       context: context,
@@ -188,9 +195,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 14),
               const Text(
-                '• วัตถุประสงค์: พัฒนาขึ้นเพื่อการบันทึกและติดตามแนวโน้มภาวะสุขภาพเบื้องต้นของผู้ป่วยโรคไม่ติดต่อเรื้อรัง (NCDs) เท่านั้น\n\n'
-                '• การตัดสินใจรักษา: ข้อมูลและคำแนะนำจากระบบ AI ไม่มีผลต่อการวินิจฉัยทางการแพทย์ การปรับเปลี่ยนขนาด หรือการรักษาต้องอยู่ภายใต้ดุลยพินิจของแพทย์ผู้เชี่ยวชาญเท่านั้น\n\n'
-                '• ภาวะฉุกเฉิน: หากมีอาการวิกฤต เจ็บแน่นหน้าอก หรือความดันโลหิตสูงรุนแรง กรุณาติดต่อสถานพยาบาลใกล้บ้านหรือโทร 1669 ทันที',
+                '• วัตถุประสงค์: บันทึกและติดตามแนวโน้มสุขภาพเบื้องต้นของผู้ป่วยโรคไม่ติดต่อเรื้อรัง (NCDs) เท่านั้น\n\n'
+                '• การรักษา: ข้อมูลจากระบบไม่มีผลต่อการวินิจฉัยทางการแพทย์ การปรับขนาดยาต้องอยู่ภายใต้ดุลยพินิจของแพทย์ผู้รักษา\n\n'
+                '• ภาวะฉุกเฉิน: หากมีอาการวิกฤต เจ็บแน่นหน้าอก กรุณาไปโรงพยาบาลหรือโทร 1669 ทันที',
                 style: TextStyle(
                   color: primaryTextColor,
                   fontSize: 13,
@@ -336,7 +343,6 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: creamBgColor,
       body: Stack(
         children: [
-          // วงกลมตกแต่งด้านบน
           Positioned(
             top: -80,
             right: -80,
@@ -366,19 +372,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 🕒 Header + Credit ผู้พัฒนา
                           _buildHeaderSection(),
                           const SizedBox(height: 18),
 
-                          // 🌱 แบนเนอร์ต้นไม้สุขภาพ (Streak Tree Banner)
+                          // 🌳 1. ต้นไม้สุขภาพ (Pure Vector Canvas)
                           _buildHealthTreeBanner(),
                           const SizedBox(height: 18),
 
-                          // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
+                          // 🧸 2. การ์ดความดัน + ตุ๊กตาสุขภาพมาสคอต (Pure Vector Canvas)
                           _buildHealthIndicatorCard(),
                           const SizedBox(height: 26),
 
-                          // 🧱 เมนูบริการ 2 คอลัมน์ (พร้อมไอคอนคมชัด)
                           const Text(
                             'เมนูบริการสุขภาพ',
                             style: TextStyle(
@@ -389,6 +393,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 14),
 
+                          // 🛡️ 3. เมนูกริดพร้อมไอคอนเวกเตอร์คมชัด 100%
                           GridView.count(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
@@ -402,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'บันทึกความดัน',
                                 subtitle: 'พิมพ์ค่าความดัน / ถ่ายรูปจอ LCD',
                                 imagePath: 'assets/images/menu_bp.jpg',
-                                icon: Icons.favorite,
+                                iconType: _MenuIconType.bloodPressure,
                                 barColor: const Color(0xFF2F9E82),
                                 onTap: () async {
                                   await Navigator.push(
@@ -421,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ห้องยาประจำตัว',
                                 subtitle: 'สแกนฉลากยา & ตั้งเตือนทานยา',
                                 imagePath: 'assets/images/menu_drug.jpg',
-                                icon: Icons.medication,
+                                iconType: _MenuIconType.medication,
                                 barColor: const Color(0xFFE8A33D),
                                 onTap: () => Navigator.push(
                                   context,
@@ -437,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'อาหาร & กิจกรรม',
                                 subtitle: 'พิมพ์บันทึกอาหาร / ถ่ายรูปมื้ออาหาร',
                                 imagePath: 'assets/images/menu_fd.jpg',
-                                icon: Icons.restaurant,
+                                iconType: _MenuIconType.nutrition,
                                 barColor: const Color(0xFFD97B4F),
                                 onTap: () async {
                                   await Navigator.push(
@@ -455,7 +460,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ปรึกษาหมอ AI',
                                 subtitle: 'ถามตอบอิง HT Guideline 2567',
                                 imagePath: 'assets/images/menu_ai.jpg',
-                                icon: Icons.chat,
+                                iconType: _MenuIconType.aiDoctor,
                                 barColor: const Color(0xFF4C8FA6),
                                 onTap: () => Navigator.push(
                                   context,
@@ -470,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'สมุดสุขภาพ',
                                 subtitle: 'ดูกราฟ 7 วัน & ประวัติความเสี่ยง',
                                 imagePath: 'assets/images/menu_graph.jpg',
-                                icon: Icons.bar_chart,
+                                iconType: _MenuIconType.healthBook,
                                 barColor: const Color(0xFF6B9E5C),
                                 onTap: () => Navigator.push(
                                   context,
@@ -485,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ข้อมูลของฉัน',
                                 subtitle: 'คำนวณ TDEE & คัดกรองโรค',
                                 imagePath: 'assets/images/menu_risk.jpg',
-                                icon: Icons.person,
+                                iconType: _MenuIconType.profile,
                                 barColor: const Color(0xFFB37B57),
                                 onTap: () async {
                                   await Navigator.push(
@@ -511,7 +516,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🕒 Widget ส่วน Header + Badge เครดิตชื่อผู้พัฒนาที่มุมบนขวา
   Widget _buildHeaderSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -621,7 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🌱 Widget แบนเนอร์ต้นไม้สุขภาพ (Streak Banner)
+  // 🌳 แบนเนอร์ต้นไม้สุขภาพ วาดด้วย Pure Canvas Vector
   Widget _buildHealthTreeBanner() {
     return Container(
       width: double.infinity,
@@ -630,22 +634,24 @@ class _HomeScreenState extends State<HomeScreen> {
         color: const Color(0xFFEAF3E4),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFF4C7A3F).withValues(alpha: 0.2),
-          width: 1,
+          color: const Color(0xFF4C7A3F).withValues(alpha: 0.25),
+          width: 1.2,
         ),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            width: 46,
+            height: 46,
             decoration: const BoxDecoration(
               color: Color(0xFFD9EBCF),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.park,
-              color: Color(0xFF4C7A3F),
-              size: 26,
+            child: Center(
+              child: CustomPaint(
+                size: const Size(30, 30),
+                painter: _HealthTreePainter(),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -664,7 +670,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _hasVitalData
-                      ? 'บันทึกสะสม $_streakDays รายการแล้ว ต้นไม้กำลังเติบโตแข็งแรงค่ะ 🌱'
+                      ? 'บันทึกสะสม $_recordCount ครั้งแล้ว ต้นไม้สุขภาพกำลังเติบโตแข็งแรง 🌱'
                       : 'เริ่มบันทึกสุขภาพวันนี้ เพื่อให้ต้นไม้เริ่มเติบโตกันนะคะ 🌱',
                   style: const TextStyle(
                     fontSize: 12,
@@ -680,7 +686,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 📊 Widget การ์ดสรุปความดัน 7 วันล่าสุด
+  // 🧸 การ์ดสรุปความดัน + ตุ๊กตาสุขภาพมาสคอต (Mascot Canvas)
   Widget _buildHealthIndicatorCard() {
     final int sys = _avgSys7Days.round();
     final int dia = _avgDia7Days.round();
@@ -689,7 +695,6 @@ class _HomeScreenState extends State<HomeScreen> {
       systolicAvg: sys,
       diastolicAvg: dia,
       hasData: _hasVitalData,
-      todayFoodLogs: _todayFoodLogs,
       profile: _profileData,
     );
 
@@ -749,16 +754,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+              // 🧸 ตุ๊กตามาสคอตแสดงอารมณ์ความดัน (Mascot Canvas Avatar)
               Container(
-                padding: const EdgeInsets.all(10),
+                width: 54,
+                height: 54,
                 decoration: BoxDecoration(
-                  color: feedback.themeColor.withValues(alpha: 0.15),
+                  color: feedback.themeColor.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: feedback.themeColor.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
                 ),
-                child: Icon(
-                  feedback.iconData,
-                  size: 30,
-                  color: feedback.themeColor,
+                child: Center(
+                  child: CustomPaint(
+                    size: const Size(36, 36),
+                    painter: _HealthMascotPainter(
+                      tier: feedback.tier,
+                      mainColor: feedback.themeColor,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -816,11 +831,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🖼️ Widget การ์ดเมนู (ใช้ไอคอน Base Font แสดงผลคมชัด 100%)
+  // 🖼️ การ์ดเมนูพร้อมไอคอน Vector Canvas
   Widget _buildMenuCard({
     required String title,
     required String subtitle,
-    required IconData icon,
+    required _MenuIconType iconType,
     required String imagePath,
     required Color barColor,
     required VoidCallback onTap,
@@ -868,16 +883,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
+              // 🛡️ ป้ายไอคอนเวกเตอร์มุมซ้ายบน
               Positioned(
                 top: 10,
                 left: 10,
                 child: Container(
-                  padding: const EdgeInsets.all(7),
+                  width: 32,
+                  height: 32,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.5),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+                  child: CustomPaint(
+                    painter: _MenuVectorIconPainter(iconType: iconType),
+                  ),
                 ),
               ),
               Positioned(
@@ -931,23 +951,241 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ==========================================
-// 🚀 Top-level Evaluator Classes
-// ==========================================
+// =========================================================================
+// 🌳 CustomPainter: ต้นไม้สุขภาพ (Health Tree Vector)
+// =========================================================================
+class _HealthTreePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
 
+    // 1. ลำต้น (Trunk)
+    final trunkPaint = Paint()..color = const Color(0xFF8B5A2B);
+    final trunkPath = Path();
+    trunkPath.moveTo(w * 0.42, h);
+    trunkPath.lineTo(w * 0.58, h);
+    trunkPath.lineTo(w * 0.54, h * 0.5);
+    trunkPath.lineTo(w * 0.46, h * 0.5);
+    trunkPath.close();
+    canvas.drawPath(trunkPath, trunkPaint);
+
+    // 2. พุ่มใบไม้ 3 ชั้น (Foliage)
+    final foliagePaint = Paint()..color = const Color(0xFF4C7A3F);
+    canvas.drawCircle(Offset(w * 0.5, h * 0.38), w * 0.35, foliagePaint);
+    canvas.drawCircle(Offset(w * 0.32, h * 0.44), w * 0.24, foliagePaint);
+    canvas.drawCircle(Offset(w * 0.68, h * 0.44), w * 0.24, foliagePaint);
+
+    // ประกายใบไม้สีอ่อน
+    final lightFoliage = Paint()..color = const Color(0xFF76A857);
+    canvas.drawCircle(Offset(w * 0.45, h * 0.32), w * 0.16, lightFoliage);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// =========================================================================
+// 🧸 CustomPainter: ตุ๊กตาสุขภาพมาสคอต (Health Mascot Face)
+// =========================================================================
+class _HealthMascotPainter extends CustomPainter {
+  final int tier;
+  final Color mainColor;
+
+  _HealthMascotPainter({required this.tier, required this.mainColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final center = Offset(w / 2, h / 2);
+    final radius = w / 2;
+
+    // 1. หัวมาสคอต (Face Background)
+    final facePaint = Paint()..color = mainColor;
+    canvas.drawCircle(center, radius, facePaint);
+
+    final whitePaint = Paint()..color = Colors.white;
+    final strokePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+
+    // 2. วาดหน้าตาตาม Tier สุขภาพ
+    if (tier == 4) {
+      // 😊 Tier 4: ความดันปกติ (ตายิ้มโค้ง + ปากยิ้มกว้าง)
+      final eyePathLeft = Path()
+        ..moveTo(w * 0.25, h * 0.45)
+        ..quadraticBezierTo(w * 0.35, h * 0.32, w * 0.45, h * 0.45);
+      final eyePathRight = Path()
+        ..moveTo(w * 0.55, h * 0.45)
+        ..quadraticBezierTo(w * 0.65, h * 0.32, w * 0.75, h * 0.45);
+      canvas.drawPath(eyePathLeft, strokePaint);
+      canvas.drawPath(eyePathRight, strokePaint);
+
+      // ปากยิ้ม
+      final mouthPath = Path()
+        ..moveTo(w * 0.32, h * 0.62)
+        ..quadraticBezierTo(w * 0.5, h * 0.85, w * 0.68, h * 0.62);
+      canvas.drawPath(mouthPath, strokePaint);
+    } else if (tier == 3) {
+      // 😐 Tier 3: เฝ้าระวัง (ตากลม + ปากตรง)
+      canvas.drawCircle(Offset(w * 0.35, h * 0.42), 2.8, whitePaint);
+      canvas.drawCircle(Offset(w * 0.65, h * 0.42), 2.8, whitePaint);
+      canvas.drawLine(
+          Offset(w * 0.35, h * 0.68), Offset(w * 0.65, h * 0.68), strokePaint);
+    } else if (tier == 2) {
+      // 😟 Tier 2: ความดันสูง (ตาตก + ปากคว่ำ)
+      canvas.drawCircle(Offset(w * 0.35, h * 0.42), 2.8, whitePaint);
+      canvas.drawCircle(Offset(w * 0.65, h * 0.42), 2.8, whitePaint);
+      final mouthPath = Path()
+        ..moveTo(w * 0.32, h * 0.72)
+        ..quadraticBezierTo(w * 0.5, h * 0.58, w * 0.68, h * 0.72);
+      canvas.drawPath(mouthPath, strokePaint);
+    } else {
+      // 🚨 Tier 1: วิกฤติ (ตา X + ปากตกใจ)
+      canvas.drawLine(
+          Offset(w * 0.28, h * 0.35), Offset(w * 0.42, h * 0.47), strokePaint);
+      canvas.drawLine(
+          Offset(w * 0.42, h * 0.35), Offset(w * 0.28, h * 0.47), strokePaint);
+
+      canvas.drawLine(
+          Offset(w * 0.58, h * 0.35), Offset(w * 0.72, h * 0.47), strokePaint);
+      canvas.drawLine(
+          Offset(w * 0.72, h * 0.35), Offset(w * 0.58, h * 0.47), strokePaint);
+
+      canvas.drawOval(
+        Rect.fromCenter(
+            center: Offset(w * 0.5, h * 0.7), width: w * 0.26, height: h * 0.2),
+        whitePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// =========================================================================
+// 🛡️ CustomPainter: เวกเตอร์ไอคอนประจำ 6 เมนู (Vector Canvas Icons)
+// =========================================================================
+enum _MenuIconType {
+  bloodPressure,
+  medication,
+  nutrition,
+  aiDoctor,
+  healthBook,
+  profile
+}
+
+class _MenuVectorIconPainter extends CustomPainter {
+  final _MenuIconType iconType;
+
+  _MenuVectorIconPainter({required this.iconType});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final p = Paint()
+      ..color = Colors.white
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final fill = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    switch (iconType) {
+      case _MenuIconType.bloodPressure:
+        // คลื่นหัวใจ EKG
+        final path = Path()
+          ..moveTo(0, h * 0.5)
+          ..lineTo(w * 0.25, h * 0.5)
+          ..lineTo(w * 0.4, h * 0.15)
+          ..lineTo(w * 0.6, h * 0.85)
+          ..lineTo(w * 0.75, h * 0.5)
+          ..lineTo(w, h * 0.5);
+        canvas.drawPath(path, p);
+        break;
+
+      case _MenuIconType.medication:
+        // แคปซูลยา
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.15, h * 0.25, w * 0.7, h * 0.5),
+            Radius.circular(w * 0.25),
+          ),
+          p,
+        );
+        canvas.drawLine(
+            Offset(w * 0.5, h * 0.25), Offset(w * 0.5, h * 0.75), p);
+        break;
+
+      case _MenuIconType.nutrition:
+        // ช้อนส้อม
+        canvas.drawLine(Offset(w * 0.3, h * 0.1), Offset(w * 0.3, h * 0.9), p);
+        canvas.drawLine(Offset(w * 0.7, h * 0.1), Offset(w * 0.7, h * 0.9), p);
+        canvas.drawCircle(Offset(w * 0.7, h * 0.25), w * 0.15, fill);
+        break;
+
+      case _MenuIconType.aiDoctor:
+        // กล่องแชทสนทนา
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.1, h * 0.15, w * 0.8, h * 0.6),
+            const Radius.circular(5),
+          ),
+          p,
+        );
+        final tail = Path()
+          ..moveTo(w * 0.3, h * 0.75)
+          ..lineTo(w * 0.2, h * 0.95)
+          ..lineTo(w * 0.5, h * 0.75);
+        canvas.drawPath(tail, fill);
+        break;
+
+      case _MenuIconType.healthBook:
+        // กราฟแท่งสถิติ
+        canvas.drawRect(
+            Rect.fromLTWH(w * 0.15, h * 0.5, w * 0.18, h * 0.4), fill);
+        canvas.drawRect(
+            Rect.fromLTWH(w * 0.41, h * 0.25, w * 0.18, h * 0.65), fill);
+        canvas.drawRect(
+            Rect.fromLTWH(w * 0.67, h * 0.4, w * 0.18, h * 0.5), fill);
+        break;
+
+      case _MenuIconType.profile:
+        // รูปคน/โปรไฟล์
+        canvas.drawCircle(Offset(w * 0.5, h * 0.3), w * 0.2, fill);
+        final body = Path()
+          ..moveTo(w * 0.15, h * 0.9)
+          ..quadraticBezierTo(w * 0.5, h * 0.55, w * 0.85, h * 0.9);
+        canvas.drawPath(body, p);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// =========================================================================
+// 🚀 Evaluator Class
+// =========================================================================
 class HealthFeedbackModel {
+  final int tier;
   final String statusTitle;
   final String adviceText;
-  final IconData iconData;
   final Color themeColor;
-  final Color bgColor;
 
   HealthFeedbackModel({
+    required this.tier,
     required this.statusTitle,
     required this.adviceText,
-    required this.iconData,
     required this.themeColor,
-    required this.bgColor,
   });
 }
 
@@ -956,17 +1194,15 @@ class HealthFeedbackEvaluator {
     required int systolicAvg,
     required int diastolicAvg,
     required bool hasData,
-    required List<Map<String, dynamic>> todayFoodLogs,
     required Map<String, dynamic>? profile,
   }) {
     if (!hasData) {
       return HealthFeedbackModel(
+        tier: 4,
         statusTitle: 'ยังไม่มีข้อมูลความดัน',
         adviceText:
             'แนะนำวัดความดันช่วงเช้า (หลังตื่นนอน) อย่างน้อยวันละ 1 ครั้งค่ะ',
-        iconData: Icons.add_chart,
         themeColor: const Color(0xFF2F9E82),
-        bgColor: const Color(0xFFECFDF5),
       );
     }
 
@@ -981,87 +1217,40 @@ class HealthFeedbackEvaluator {
       tier = 4;
     }
 
-    final String diseases =
-        (profile?['underlying_diseases'] ?? '').toString().toLowerCase();
-    final bool hasDM = diseases.contains('เบาหวาน');
-    final bool hasCKD = diseases.contains('ไต');
-    final bool isSmoker = profile?['smokes'] == true;
-    final double bmi = (profile?['bmi'] as num?)?.toDouble() ?? 0.0;
-
-    String actionAdvice = '';
-
-    if (tier == 1) {
-      actionAdvice =
-          '🚨 อันตราย! ความดันสูงวิกฤติ งดกิจกรรมหนัก สังเกตอาการหน้ามืด/เจ็บอก และรีบพบแพทย์ด่วน';
-    } else if (todayFoodLogs.isNotEmpty && _hasWarningInFoods(todayFoodLogs)) {
-      actionAdvice =
-          '⚠️ อาหารวันนี้โซเดียม/น้ำตาลสูง: ระวังบวมน้ำและความดันพุ่ง พรุ่งนี้เน้นทานจืดและผักให้มากขึ้น';
-    } else if (tier == 2) {
-      actionAdvice =
-          '💊 ความดันยังสูง: ทานยาให้ตรงเวลาอย่างเคร่งครัด และงดปรุงรส/น้ำปลา/ซีอิ๊ว (ลดเค็มลดความดันได้ 5 mmHg)';
-    } else {
-      if (isSmoker) {
-        actionAdvice =
-            '🚬 งดสูบบุหรี่: ช่วยลดความเสี่ยงโรคหัวใจและหลอดเลือดสมองตีบเฉียบพลันได้เห็นผลที่สุด';
-      } else if (hasCKD) {
-        actionAdvice =
-            '💧 ถนอมไต: หลีกเลี่ยงยาแก้ปวดกลุ่ม NSAIDs (เช่น ไอบูโพรเฟน) และงดอาหารหมักดองเด็ดขาด';
-      } else if (hasDM) {
-        actionAdvice =
-            '🥗 คุมน้ำตาล: เน้นทานอาหารสูตร 2:1:1 (ผักครึ่งจาน ข้าว 1 ส่วน เนื้อ 1 ส่วน) ป้องกันหลอดเลือดอักเสบ';
-      } else if (bmi >= 25.0) {
-        actionAdvice =
-            '🏃‍♂️ ระวังอ้วนลงพุง: การลดน้ำหนัก 1 กก. ช่วยลดความดันโลหิตได้ถึง 1 mmHg พยายามขยับร่างกายบ่อยๆ';
-      } else {
-        actionAdvice =
-            '✨ สุขภาพอยู่ในเกณฑ์ดี: ดื่มน้ำเปล่าให้เพียงพอ และเดินแกว่งแขน 30 นาที/วัน เพื่อหลอดเลือดที่แข็งแรง';
-      }
-    }
-
     switch (tier) {
       case 1:
         return HealthFeedbackModel(
+          tier: 1,
           statusTitle: 'วิกฤติ! ต้องพบแพทย์',
-          adviceText: actionAdvice,
-          iconData: Icons.warning,
+          adviceText:
+              '🚨 ความดันสูงวิกฤติ งดกิจกรรมหนัก สังเกตอาการหน้ามืด/เจ็บอก และรีบพบแพทย์ด่วน',
           themeColor: const Color(0xFFEF4444),
-          bgColor: const Color(0xFFFEF2F2),
         );
       case 2:
         return HealthFeedbackModel(
+          tier: 2,
           statusTitle: 'ความดันระดับสูง',
-          adviceText: actionAdvice,
-          iconData: Icons.sentiment_dissatisfied,
+          adviceText:
+              '💊 ทานยาให้ตรงเวลาอย่างเคร่งครัด งดของเค็ม/ปรุงรสจัด ช่วยลดความดันได้ 5 mmHg',
           themeColor: const Color(0xFFF97316),
-          bgColor: const Color(0xFFFFF7ED),
         );
       case 3:
         return HealthFeedbackModel(
+          tier: 3,
           statusTitle: 'เฝ้าระวัง (ค่อนข้างสูง)',
-          adviceText: actionAdvice,
-          iconData: Icons.sentiment_neutral,
+          adviceText:
+              '🥗 ปรับพฤติกรรม ลดอาหารหวานมันเค็ม ขยับร่างกายสม่ำเสมอเพื่อหลอดเลือดแข็งแรง',
           themeColor: const Color(0xFFEAB308),
-          bgColor: const Color(0xFFFEFCE8),
         );
       case 4:
       default:
         return HealthFeedbackModel(
+          tier: 4,
           statusTitle: 'ความดันปกติ (ดีเยี่ยม)',
-          adviceText: actionAdvice,
-          iconData: Icons.sentiment_very_satisfied,
+          adviceText:
+              '✨ สุขภาพอยู่ในเกณฑ์ดีเยี่ยม ดื่มน้ำสะอาดให้เพียงพอ และเดินออกกำลังกายวันละ 30 นาทีค่ะ',
           themeColor: const Color(0xFF2F9E82),
-          bgColor: const Color(0xFFECFDF5),
         );
     }
-  }
-
-  static bool _hasWarningInFoods(List<Map<String, dynamic>> logs) {
-    for (var log in logs) {
-      if (log['warning_flags'] != null &&
-          (log['warning_flags'] as List).isNotEmpty) {
-        return true;
-      }
-    }
-    return false;
   }
 }
