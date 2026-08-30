@@ -111,9 +111,10 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       child: Column(
                         children: [
-                          // 🛡️ โลโก้โล่ป้องกันสุขภาพสีเขียว (Green Guard Logo)
+                          // 🛡️ โลโก้โล่ป้องกันสุขภาพสีเขียว (วาดด้วย Vector Canvas แสดงผล 100% ไม่หายบน Vercel)
                           Container(
-                            padding: const EdgeInsets.all(20),
+                            width: 108,
+                            height: 108,
                             decoration: BoxDecoration(
                               color: const Color(0xFFEAF3E4),
                               shape: BoxShape.circle,
@@ -122,10 +123,8 @@ class _LoginPageState extends State<LoginPage> {
                                 width: 2,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.health_and_safety_rounded,
-                              size: 72,
-                              color: emeraldTheme,
+                            child: const Center(
+                              child: _GreenGuardVectorShield(size: 60),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -190,4 +189,90 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+}
+
+// =========================================================================
+// 🛡️ Widget วาดโล่ Green Guard ด้วย CustomPainter (ป้องกัน Icon Tree-shaking)
+// =========================================================================
+class _GreenGuardVectorShield extends StatelessWidget {
+  final double size;
+
+  const _GreenGuardVectorShield({this.size = 60});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _ShieldCrossPainter(),
+    );
+  }
+}
+
+class _ShieldCrossPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // 1. วาดโครงสร้างโล่ป้องกันสุขภาพ (Green Shield Body)
+    final shieldPath = Path();
+    shieldPath.moveTo(w * 0.5, 0);
+    shieldPath.lineTo(w * 0.95, h * 0.16);
+    shieldPath.cubicTo(
+      w * 0.95,
+      h * 0.56,
+      w * 0.68,
+      h * 0.88,
+      w * 0.5,
+      h,
+    );
+    shieldPath.cubicTo(
+      w * 0.32,
+      h * 0.88,
+      w * 0.05,
+      h * 0.56,
+      w * 0.05,
+      h * 0.16,
+    );
+    shieldPath.close();
+
+    final shieldPaint = Paint()
+      ..color = const Color(0xFF2F9E82)
+      ..style = PaintingStyle.fill;
+
+    canvas.drawPath(shieldPath, shieldPaint);
+
+    // 2. วาดกากบาทการแพทย์สีขาวตรงกลาง (Medical Cross)
+    final crossPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final crossWidth = w * 0.18;
+    final crossLength = h * 0.44;
+    final cx = w * 0.5;
+    final cy = h * 0.43;
+
+    // แท่งแนวตั้ง
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+            center: Offset(cx, cy), width: crossWidth, height: crossLength),
+        Radius.circular(crossWidth * 0.35),
+      ),
+      crossPaint,
+    );
+
+    // แท่งแนวนอน
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+            center: Offset(cx, cy), width: crossLength, height: crossWidth),
+        Radius.circular(crossWidth * 0.35),
+      ),
+      crossPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
