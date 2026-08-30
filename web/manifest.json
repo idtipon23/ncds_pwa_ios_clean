@@ -1,11 +1,11 @@
 {
-    "name": "NCDs Voice App",
-    "short_name": "NCDs App",
+    "name": "NCDs Care & Health",
+    "short_name": "NCDs Health",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFF8F0",
+    "theme_color": "#2F9E82",
+    "description": "ระบบบันทึกและติดตามสุขภาพสำหรับผู้สูงอายุและผู้ป่วย NCDs",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
