@@ -53,27 +53,43 @@ class VitalRepository {
   Future<List<Map<String, dynamic>>> getLast7Days(String patientId) {
     final now = DateTime.now().toUtc();
     final startDate = now.subtract(const Duration(days: 7));
-    return getVitalSignsByDateRange(patientId, startDate: startDate, endDate: now);
+    return getVitalSignsByDateRange(patientId,
+        startDate: startDate, endDate: now);
   }
 
   /// 4. ดึงประวัติ 1 เดือนย้อนหลัง (30 วัน)
   Future<List<Map<String, dynamic>>> getLast1Month(String patientId) {
     final now = DateTime.now().toUtc();
     final startDate = now.subtract(const Duration(days: 30));
-    return getVitalSignsByDateRange(patientId, startDate: startDate, endDate: now);
+    return getVitalSignsByDateRange(patientId,
+        startDate: startDate, endDate: now);
   }
 
   /// 5. ดึงประวัติ 3 เดือนย้อนหลัง (90 วัน)
   Future<List<Map<String, dynamic>>> getLast3Months(String patientId) {
     final now = DateTime.now().toUtc();
     final startDate = now.subtract(const Duration(days: 90));
-    return getVitalSignsByDateRange(patientId, startDate: startDate, endDate: now);
+    return getVitalSignsByDateRange(patientId,
+        startDate: startDate, endDate: now);
   }
 
   /// 6. ดึงประวัติ 6 เดือนย้อนหลัง (180 วัน)
   Future<List<Map<String, dynamic>>> getLast6Months(String patientId) {
     final now = DateTime.now().toUtc();
     final startDate = now.subtract(const Duration(days: 180));
-    return getVitalSignsByDateRange(patientId, startDate: startDate, endDate: now);
+    return getVitalSignsByDateRange(patientId,
+        startDate: startDate, endDate: now);
+  }
+
+  /// 7. ลบรายการบันทึกสัญญาณชีพตาม ID
+  Future<void> deleteVitalSign(dynamic recordId) async {
+    try {
+      if (recordId == null) return;
+      await _supabase.from('vital_signs').delete().eq('id', recordId);
+      debugPrint('✅ ลบรายการ vital_signs ID: $recordId เรียบร้อย');
+    } catch (e) {
+      debugPrint('❌ Error in deleteVitalSign: $e');
+      rethrow;
+    }
   }
 }
