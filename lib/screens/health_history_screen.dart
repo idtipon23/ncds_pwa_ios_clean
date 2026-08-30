@@ -93,10 +93,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   Future<void> _deleteVitalRecord(dynamic recordId) async {
     if (recordId == null) return;
     try {
-      // 1. ลบจากฐานข้อมูล Supabase โดยอิง Primary Key (id)
-      await _vitalRepository.deleteVitalSign(recordId);
+      await supabase.from('vital_signs').delete().eq('id', recordId);
 
-      // 2. อัปเดตรายการใน State เพื่อให้กราฟและการ์ดสรุปคำนวณใหม่ทันที
       setState(() {
         _vitalHistory.removeWhere((item) => item['id'] == recordId);
         if (_vitalHistory.isEmpty && _labHistory.isEmpty) {
@@ -152,8 +150,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: const Row(
           children: [
-            Icon(Icons.delete_outline_rounded, color: dangerColor, size: 26),
-            SizedBox(width: 8),
+            _TrashCanVectorIcon(size: 24, color: dangerColor),
+            SizedBox(width: 10),
             Text(
               'ยืนยันการลบข้อมูล',
               style: TextStyle(
@@ -182,8 +180,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.favorite_rounded,
-                      color: dangerColor, size: 22),
+                  const Icon(Icons.favorite, color: dangerColor, size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
@@ -210,7 +207,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              '* ข้อมูลจะถูกลบออกจากฐานข้อมูล Supabase ถาวร และระบบจะคำนวณค่าเฉลี่ยใหม่ทันที',
+              '* ข้อมูลจะถูกลบออกจากระบบถาวร และระบบจะคำนวณค่าเฉลี่ยใหม่ทันที',
               style: TextStyle(fontSize: 11, color: mutedTextColor),
             ),
           ],
@@ -627,21 +624,20 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        // 🗑️ ปุ่มลบการบันทึก (Trash Icon)
+                        const SizedBox(width: 8),
+                        // 🗑️ ปุ่มลบเวกเตอร์ (Pure Canvas Vector) ป้องกัน Tree-shaking 100%
                         InkWell(
                           onTap: () => _confirmDeleteDialog(item),
                           borderRadius: BorderRadius.circular(20),
                           child: Container(
-                            padding: const EdgeInsets.all(5),
+                            padding: const EdgeInsets.all(7),
                             decoration: BoxDecoration(
-                              color: dangerColor.withValues(alpha: 0.08),
+                              color: dangerColor.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.delete_outline_rounded,
+                            child: const _TrashCanVectorIcon(
+                              size: 16,
                               color: dangerColor,
-                              size: 17,
                             ),
                           ),
                         ),
@@ -1018,4 +1014,88 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       ),
     );
   }
+}
+
+// =========================================================================
+// 🗑️ Pure Vector Canvas: ไอคอนรูปถังขยะ (Trash Can Vector) ป้องกัน Tree-shaking
+// =========================================================================
+class _TrashCanVectorIcon extends StatelessWidget {
+  final double size;
+  final Color color;
+
+  const _TrashCanVectorIcon({
+    this.size = 18,
+    this.color = const Color(0xFFD85A30),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        painter: _TrashCanPainter(color: color),
+      ),
+    );
+  }
+}
+
+class _TrashCanPainter extends CustomPainter {
+  final Color color;
+
+  _TrashCanPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = w * 0.11
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // 1. ฝาถังขยะ (Lid)
+    canvas.drawLine(
+      Offset(w * 0.12, h * 0.28),
+      Offset(w * 0.88, h * 0.28),
+      strokePaint,
+    );
+
+    // หูจับฝาด้านบน
+    final handlePath = Path()
+      ..moveTo(w * 0.36, h * 0.28)
+      ..lineTo(w * 0.36, h * 0.12)
+      ..lineTo(w * 0.64, h * 0.12)
+      ..lineTo(w * 0.64, h * 0.28);
+    canvas.drawPath(handlePath, strokePaint);
+
+    // 2. ตัวถังขยะ (Can Body)
+    final bodyPath = Path()
+      ..moveTo(w * 0.22, h * 0.28)
+      ..lineTo(w * 0.28, h * 0.84)
+      ..quadraticBezierTo(w * 0.29, h * 0.94, w * 0.40, h * 0.94)
+      ..lineTo(w * 0.60, h * 0.94)
+      ..quadraticBezierTo(w * 0.71, h * 0.94, w * 0.72, h * 0.84)
+      ..lineTo(w * 0.78, h * 0.28);
+    canvas.drawPath(bodyPath, strokePaint);
+
+    // 3. เส้นขีดแนวตั้งในถัง 2 เส้น
+    canvas.drawLine(
+      Offset(w * 0.41, h * 0.44),
+      Offset(w * 0.41, h * 0.78),
+      strokePaint,
+    );
+    canvas.drawLine(
+      Offset(w * 0.59, h * 0.44),
+      Offset(w * 0.59, h * 0.78),
+      strokePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrashCanPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
