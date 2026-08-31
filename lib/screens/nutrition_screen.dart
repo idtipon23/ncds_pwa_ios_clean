@@ -3,6 +3,7 @@ import '../services/patient_profile_service.dart';
 import '../services/nutrition_service.dart';
 import '../services/vital_repository.dart';
 import '../services/patient_database_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class NutritionScreen extends StatefulWidget {
   const NutritionScreen({super.key});
@@ -270,6 +271,60 @@ class _NutritionScreenState extends State<NutritionScreen> {
         );
       },
     );
+  }
+  // สร้าง Instance สำหรับ ImagePicker
+  final ImagePicker _imagePicker = ImagePicker();
+
+  Future<void> _pickAndAnalyzeFoodImage(ImageSource source) async {
+    if (_patientId == null) return;
+
+    try {
+      // บีบอัดขนาดภาพทันที (1024px, คุณภาพ 70%) ป้องกัน Payload ใหญ่เกินบน PWA
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 70,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() => _isAnalyzing = true);
+
+      final bytes = await pickedFile.readAsBytes();
+      final mimeType = pickedFile.mimeType ?? 'image/jpeg';
+
+      final result = await _nutritionService.analyzeFoodFromImage(
+        imageBytes: bytes,
+        mimeType: mimeType,
+        underlyingDiseases: _underlyingDiseases,
+      );
+
+      if (result != null && mounted) {
+        _showFoodConfirmDialog(result);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ไม่สามารถวิเคราะห์ภาพถ่ายอาหารได้ กรุณาลองใหม่อีกครั้ง'),
+              backgroundColor: terracottaTheme,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error picking/analyzing food image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการเปิดกล้อง/รูปภาพ: $e'),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isAnalyzing = false);
+    }
   }
 
   Widget _buildNutrientBadge(String label, String value, Color color) {
@@ -850,12 +905,57 @@ class _NutritionScreenState extends State<NutritionScreen> {
           ),
           const SizedBox(height: 16),
 
+          // 📷 แถบปุ่มถ่ายภาพ / เลือกภาพสำหรับ PWA
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isAnalyzing
+                      ? null
+                      : () => _pickAndAnalyzeFoodImage(ImageSource.camera),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: terracottaTheme, width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: terracottaTheme.withValues(alpha: 0.05),
+                  ),
+                  icon: const Icon(Icons.camera_alt_rounded, color: terracottaTheme),
+                  label: const Text(
+                    'ถ่ายรูปอาหาร',
+                    style: TextStyle(color: terracottaTheme, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isAnalyzing
+                      ? null
+                      : () => _pickAndAnalyzeFoodImage(ImageSource.gallery),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFEADBCE), width: 1.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    backgroundColor: softCardBg,
+                  ),
+                  icon: const Icon(Icons.photo_library_rounded, color: secondaryTextColor),
+                  label: const Text(
+                    'เลือกจากคลัง',
+                    style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // ช่องกรอกข้อความเดิม
           TextField(
             controller: _foodInputController,
             maxLines: 2,
             style: const TextStyle(color: primaryTextColor),
             decoration: InputDecoration(
-              hintText: 'พิมพ์ชื่ออาหาร เช่น: สลัดอกไก่ 7-11, เกาเหลาเลือดหมู, ข้าวสวย 1 ชาม',
+              hintText: 'หรือพิมพ์ชื่ออาหาร เช่น: สลัดอกไก่ 7-11, เกาเหลาเลือดหมู',
               hintStyle: const TextStyle(color: mutedTextColor, fontSize: 13),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
@@ -876,7 +976,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -896,7 +996,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     )
                   : const Icon(Icons.send_rounded),
               label: Text(
-                _isAnalyzing ? 'AI กำลังวิเคราะห์...' : 'วิเคราะห์สารอาหาร',
+                _isAnalyzing ? 'AI กำลังวิเคราะห์ภาพ/ข้อความ...' : 'วิเคราะห์จากข้อความ',
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),

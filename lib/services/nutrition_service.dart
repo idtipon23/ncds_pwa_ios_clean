@@ -135,6 +135,64 @@ class NutritionService {
     }
     return null;
   }
+  /// 📷 AI วิเคราะห์อาหารจาก "ภาพถ่าย" (Multimodal Vision)
+  Future<Map<String, dynamic>?> analyzeFoodFromImage({
+    required Uint8List imageBytes,
+    String mimeType = 'image/jpeg',
+    required String underlyingDiseases,
+  }) async {
+    final now = DateTime.now();
+    final isLateNight = now.hour >= 20 || now.hour < 4;
+
+    final prompt = '''
+คุณคือนักโภชนาการทางการแพทย์สำหรับผู้ป่วยโรคเรื้อรัง (NCDs)
+จงดูภาพถ่ายอาหารนี้ แล้ววิเคราะห์รายการอาหาร ปริมาณ และประเมินคุณค่าทางโภชนาการ
+
+ข้อมูลผู้ป่วย:
+- โรคประจำตัว: $underlyingDiseases
+- เวลาที่รับประทานปัจจุบัน: ${now.hour}:${now.minute.toString().padLeft(2, '0')} น. (ช่วงหลัง 20.00 น. = $isLateNight)
+
+กรุณาประเมินชื่ออาหาร คำนวณสารอาหารโดยอ้างอิงจากฐานข้อมูลอาหารไทย/ร้านสะดวกซื้อ และส่งกลับเป็น JSON Format ดังนี้เท่านั้น:
+{
+  "food_name": "ชื่ออาหารและส่วนประกอบที่ตรวจพบในรูป เช่น ข้าวราดกะเพราไก่ไข่ดาว",
+  "calories": 450.0,
+  "carbs_g": 55.0,
+  "protein_g": 20.0,
+  "fat_g": 16.0,
+  "sodium_mg": 850.0,
+  "sugar_g": 4.0,
+  "trans_fat_g": 0.0,
+  "fiber_g": 2.5,
+  "meal_type": "มื้ออาหาร",
+  "warning_flags": [
+    "ข้อความเตือนทางการแพทย์ เช่น โซเดียมสูงเกิน 600mg (ระวังในโรคความดัน/ไต), มีน้ำตาลสูง (ระวังในเบาหวาน), หรือทานมื้อดึกหลัง 20.00 น."
+  ],
+  "nutrition_advice": "คำแนะนำสั้นๆ 1 ประโยคสำหรับมื้อนี้"
+}
+''';
+
+    try {
+      final responseText = await _aiProxy.generateContent(
+        serviceType: 'nutrition',
+        prompt: prompt,
+        structured: true,
+        contextData: {'underlying_diseases': underlyingDiseases},
+        fileData: {
+          'mime_type': mimeType,
+          'data': base64Encode(imageBytes),
+        },
+      );
+
+      final cleanedJson = responseText
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+      return jsonDecode(cleanedJson) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('❌ Nutrition Image (Vision) Error: $e');
+    }
+    return null;
+  }
 
   /// 💾 3. บันทึกมื้ออาหารลง Supabase
   Future<void> saveFoodLog({
