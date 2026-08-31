@@ -401,11 +401,23 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   }
 
   // 🔔 2. Pop-up Modal จัดการเชื่อมต่อ LINE พร้อมเลือก คนไข้ VS ญาติ
-  void _showLineConnectionDialog() {
+  void _showLineConnectionDialog() async { // 👈 เติม async ตรงนี้
     String selectedRole = _lineRecipientRole;
     final manualIdCtrl = TextEditingController(text: _lineUserId ?? '');
     String pairingCode = (100000 + Random().nextInt(900000)).toString();
 
+    // ⚡ บันทึกรหัส 6 หลักลง Supabase ทันทีที่เปิด Pop-up เพื่อให้ LINE จับคู่ได้เลย
+    final patientId = await _profileService.getCurrentPatientId();
+    if (patientId != null) {
+      await Supabase.instance.client.from('patients').update({
+        'line_recipient_role': selectedRole,
+        'line_pairing_code': pairingCode,
+        'line_pairing_expires_at': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String(),
+      }).eq('id', patientId);
+    }
+
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       barrierDismissible: true,
