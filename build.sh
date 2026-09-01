@@ -11,6 +11,7 @@ export PATH="$PATH:$(pwd)/_flutter/bin"
 # 2. เตรียม Environment Variables
 echo "SUPABASE_URL=$SUPABASE_URL" > .env
 echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" >> .env
+echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> .env
 
 # 3. สั่ง Build สำหรับ Web PWA
 flutter config --no-analytics
