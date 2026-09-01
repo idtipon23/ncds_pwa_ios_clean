@@ -191,7 +191,7 @@ class VoiceHealthService {
 }) async {
   try {
     final visionModel = GenerativeModel(
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3.6-flash',
       apiKey: apiKey,
       generationConfig: GenerationConfig(
         responseMimeType: 'application/json',
