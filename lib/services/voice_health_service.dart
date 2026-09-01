@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'ai_proxy_service.dart';
 import 'patient_profile_service.dart';
 
 class VoiceHealthService {
@@ -183,24 +184,16 @@ class VoiceHealthService {
     }
   }
 
-  // 📍 ฟังก์ชันสกัดข้อมูลใบแล็บ (รองรับ Web, iOS PWA และ Mobile 100%)
+  // 📍 ฟังก์ชันสกัดข้อมูลใบแล็บ (ใช้ Supabase Edge Function proxy เพื่อให้ PWA/Web ทำงานได้)
   Future<Map<String, dynamic>?> processLabReportImage(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
   }) async {
     try {
-      final visionModel = GenerativeModel(
-        model: 'gemini-3.6-flash',
-        apiKey: apiKey,
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        ),
-      );
-
-      final content = [
-        Content.multi([
-          TextPart(
+      final encoded = base64Encode(imageBytes);
+      final responseText = await AiProxyService().generateContent(
+        serviceType: 'lab',
+        prompt:
             'สกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine จากใบแล็บนี้เป็น JSON รูปแบบนี้:\n'
             '{\n'
             '  "total_cholesterol": number หรือ null,\n'
@@ -209,22 +202,20 @@ class VoiceHealthService {
             '  "fasting_blood_sugar": number หรือ null,\n'
             '  "creatinine": number หรือ null\n'
             '}',
-          ),
-          DataPart(mimeType, imageBytes),
-        ])
-      ];
+        fileData: {
+          'mime_type': mimeType,
+          'data': encoded,
+        },
+      );
 
-      final response = await visionModel.generateContent(content);
-      final text = response.text;
+      if (responseText.isEmpty) return null;
 
-      if (text != null && text.isNotEmpty) {
-        String cleanedJson = text
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
-        return jsonDecode(cleanedJson) as Map<String, dynamic>;
-      }
-      return null;
+      final cleanedJson = responseText
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
+      return jsonDecode(cleanedJson) as Map<String, dynamic>;
     } catch (e) {
       debugPrint('Lab Report OCR Error: $e');
       return null;

@@ -41,6 +41,9 @@ function getSystemInstruction(serviceType: string, contextData?: any): string {
     case "vitals":
       return `คุณคือผู้ช่วยทางการแพทย์สำหรับสกัดข้อมูลสัญญาณชีพ (ความดันตัวบน/ล่าง, ชีพจร, ค่าน้ำตาล) จากข้อความหรือเสียงพูดของผู้สูงอายุ ให้ตอบกลับในรูปแบบ JSON โครงสร้าง: {"sys": 120, "dia": 80, "pul": 75, "sugar_level": null, "has_warning_sign": false, "urgency_level": "NORMAL", "feedback_message": "..."}${contextStr}`;
 
+    case "lab":
+      return `คุณคือ AI สำหรับอ่านผลตรวจทางห้องปฏิบัติการใบแล็บ ความรับผิดชอบคือสกัดค่าเฉพาะตัวเลขที่ชัดเจนจากภาพใบแล็บและตอบกลับเป็น JSON เท่านั้น โดยต้องใช้คีย์ภาษาอังกฤษตามชื่อฟิลด์ที่กำหนด: { "total_cholesterol": number หรือ null, "hdl": number หรือ null, "ldl": number หรือ null, "fasting_blood_sugar": number หรือ null, "creatinine": number หรือ null } ถ้าตัวเลขไม่ชัดเจน ให้ใส่ null ไม่ใช่ค่าเดา${contextStr}`;
+
     case "consult":
     default:
       return `คุณคือ "ผู้ช่วยปัญญาประดิษฐ์ทางการแพทย์" (AI Medical Assistant) เชี่ยวชาญด้านโรค NCDs (ความดันโลหิตสูงและเบาหวาน) ทำหน้าที่ให้คำปรึกษา สกัดข้อมูลสุขภาพ และตรวจจับอาการอันตราย (Warning Signs) จาก "คำพูด/ข้อความ (Text/Voice Input)" และ "ภาพถ่ายหน้าจอเครื่องวัดความดัน (LCD Vision Input)"
