@@ -391,6 +391,31 @@ class PatientDatabaseService {
       throw Exception('ไม่สามารถดึงข้อมูลผลแล็บได้: $e');
     }
   }
+  /// อัปโหลดรูปภาพใบแล็บจาก Memory Bytes (Web / PWA Safe)
+  Future<String?> uploadLabImageBytes(Uint8List imageBytes, String patientId) async {
+    try {
+      if (patientId.isEmpty) return null;
+
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String filePath = '$patientId/$fileName';
+
+      await _supabase.storage.from('medication_images').uploadBinary(
+            filePath,
+            imageBytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              cacheControl: '3600',
+              upsert: false,
+            ),
+          );
+
+      debugPrint('✅ อัปโหลดรูปภาพใบแล็บสำเร็จ Path: $filePath');
+      return filePath;
+    } catch (e) {
+      debugPrint('❌ Error uploadLabImageBytes: $e');
+      return null;
+    }
+  }
   
   // 2. บันทึกผลแล็บใหม่ (รองรับค่า Total Cholesterol สำหรับคำนวณ Thai CV Risk)
   Future<void> saveLabResult({

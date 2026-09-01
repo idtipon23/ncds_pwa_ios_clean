@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/app_config.dart';
 import '../services/patient_profile_service.dart';
@@ -28,7 +29,6 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
   static const Color secondaryTextColor = Color(0xFF8A7568);
   static const Color mutedTextColor = Color(0xFFB3A69B);
   static const Color emeraldTheme = Color(0xFF2F9E82);
-  static const Color softCardBg = Color(0xFFFBF6EE);
 
   @override
   void initState() {
@@ -53,7 +53,31 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     }
   }
 
-  // 2. ฟังก์ชันถ่ายภาพใบแล็บพร้อมจำกัดขนาด (Anti-OOM Protection)
+  Future<Uint8List> _prepareLabImageBytes(Uint8List imageBytes) async {
+    const int maxBytes = 1200000;
+    if (imageBytes.lengthInBytes <= maxBytes) {
+      return imageBytes;
+    }
+
+    try {
+      final compressed = await FlutterImageCompress.compressWithList(
+        imageBytes,
+        quality: 70,
+        minWidth: 1024,
+        minHeight: 1024,
+      );
+
+      if (compressed.lengthInBytes > 0 && compressed.lengthInBytes < imageBytes.lengthInBytes) {
+        return compressed;
+      }
+    } catch (e) {
+      debugPrint('Lab image compression fallback: $e');
+    }
+
+    return imageBytes;
+  }
+
+  // 2. ฟังก์ชันถ่ายภาพใบแล็บพร้อมจำกัดขนาด (Web & PWA Safe)
   Future<void> _scanLabReport() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
@@ -64,15 +88,17 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     );
 
     if (image == null) return;
-    File imageFile = File(image.path);
 
     setState(() => _isProcessingImage = true);
 
     try {
-      final labData = await _voiceService.processLabReportImage(imageFile);
+      // อ่านข้อมูลเป็น Bytes โดยตรง ป้องกัน Error บน Web
+      final Uint8List rawBytes = await image.readAsBytes();
+      final Uint8List imageBytes = await _prepareLabImageBytes(rawBytes);
+      final labData = await _voiceService.processLabReportImage(imageBytes);
 
       if (labData != null && mounted) {
-        _showConfirmLabDialog(labData, imageFile);
+        _showConfirmLabDialog(labData, imageBytes);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -97,8 +123,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     }
   }
 
-  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก
-  void _showConfirmLabDialog(Map<String, dynamic> labData, File imageFile) {
+  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก (ใช้ Image.memory)
+  void _showConfirmLabDialog(Map<String, dynamic> labData, Uint8List imageBytes) {
     final double tcVal = (labData['total_cholesterol'] as num?)?.toDouble() ?? 0.0;
     final double hdlVal = (labData['hdl'] as num?)?.toDouble() ?? 0.0;
     final double ldlVal = (labData['ldl'] as num?)?.toDouble() ?? 0.0;
@@ -136,8 +162,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    imageFile,
+                  child: Image.memory(
+                    imageBytes,
                     height: 130,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -206,7 +232,7 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 double.tryParse(ldlCtrl.text) ?? 0.0,
                 double.tryParse(fbsCtrl.text) ?? 0.0,
                 double.tryParse(crCtrl.text) ?? 0.0,
-                imageFile,
+                imageBytes,
               );
             },
             child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -239,14 +265,21 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     );
   }
 
-  // 4. บันทึกผลแล็บลง Database
-  Future<void> _saveLabResult(double tc, double hdl, double ldl, double fbs, double cr, File imageFile) async {
+  // 4. บันทึกผลแล็บลง Database (ส่ง Bytes ไปอัปโหลด)
+  Future<void> _saveLabResult(
+    double tc,
+    double hdl,
+    double ldl,
+    double fbs,
+    double cr,
+    Uint8List imageBytes,
+  ) async {
     setState(() => _isLoading = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
       if (patientId == null) throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
 
-      final imagePath = await _dbService.uploadMedicationImage(imageFile, patientId);
+      final imagePath = await _dbService.uploadLabImageBytes(imageBytes, patientId);
 
       await _dbService.saveLabResult(
         patientId: patientId,

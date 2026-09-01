@@ -1,5 +1,6 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:printing/printing.dart';
 import 'package:image_picker/image_picker.dart';
@@ -94,6 +95,30 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     }
   }
 
+  Future<Uint8List> _prepareLabImageBytes(Uint8List imageBytes) async {
+    const int maxBytes = 1200000;
+    if (imageBytes.lengthInBytes <= maxBytes) {
+      return imageBytes;
+    }
+
+    try {
+      final compressed = await FlutterImageCompress.compressWithList(
+        imageBytes,
+        quality: 70,
+        minWidth: 1024,
+        minHeight: 1024,
+      );
+
+      if (compressed.lengthInBytes > 0 && compressed.lengthInBytes < imageBytes.lengthInBytes) {
+        return compressed;
+      }
+    } catch (e) {
+      debugPrint('Lab image compression fallback: $e');
+    }
+
+    return imageBytes;
+  }
+
   // 🔬 1. ฟังก์ชันเปิดกล้องถ่ายใบแล็บ & สกัดค่าด้วย AI
   Future<void> _scanLabReport() async {
     final ImagePicker picker = ImagePicker();
@@ -105,15 +130,16 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     );
 
     if (image == null) return;
-    File imageFile = File(image.path);
 
     setState(() => _isProcessingLab = true);
 
     try {
-      final labData = await _voiceService.processLabReportImage(imageFile);
+      final rawBytes = await image.readAsBytes();
+      final imageBytes = await _prepareLabImageBytes(rawBytes);
+      final labData = await _voiceService.processLabReportImage(imageBytes);
 
       if (labData != null && mounted) {
-        _showConfirmLabDialog(labData, imageFile);
+        _showConfirmLabDialog(labData, imageBytes);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -139,7 +165,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   }
 
   // 🔬 2. หน้าต่างตรวจสอบและยืนยันค่าแล็บก่อนบันทึก
-  void _showConfirmLabDialog(Map<String, dynamic> labData, File imageFile) {
+  void _showConfirmLabDialog(Map<String, dynamic> labData, Uint8List imageBytes) {
     final double tcVal = (labData['total_cholesterol'] as num?)?.toDouble() ?? 0.0;
     final double hdlVal = (labData['hdl'] as num?)?.toDouble() ?? 0.0;
     final double ldlVal = (labData['ldl'] as num?)?.toDouble() ?? 0.0;
@@ -177,8 +203,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    imageFile,
+                  child: Image.memory(
+                    imageBytes,
                     height: 130,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -247,7 +273,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 double.tryParse(ldlCtrl.text) ?? 0.0,
                 double.tryParse(fbsCtrl.text) ?? 0.0,
                 double.tryParse(crCtrl.text) ?? 0.0,
-                imageFile,
+                imageBytes,
               );
             },
             child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -281,13 +307,13 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   }
 
   // 🔬 3. บันทึกผลแล็บลงตาราง lab_results ใน Supabase
-  Future<void> _saveLabResult(double tc, double hdl, double ldl, double fbs, double cr, File imageFile) async {
+  Future<void> _saveLabResult(double tc, double hdl, double ldl, double fbs, double cr, Uint8List imageBytes) async {
     setState(() => _viewState = HistoryViewState.loading);
     try {
       final patientId = await _profileService.getCurrentPatientId();
       if (patientId == null) throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
 
-      final imagePath = await _dbService.uploadMedicationImage(imageFile, patientId);
+      final imagePath = await _dbService.uploadLabImageBytes(imageBytes, patientId);
 
       await _dbService.saveLabResult(
         patientId: patientId,
@@ -1035,10 +1061,12 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   Widget _buildPremiumGradientSummaryCard(
       double avgSys, double avgDia, double avgPulse) {
     String title = 'ภาพรวมความดัน 7 วันล่าสุด';
-    if (_selectedFilter == DateRangeFilter.last1Month)
+    if (_selectedFilter == DateRangeFilter.last1Month) {
       title = 'ภาพรวมความดัน 1 เดือนล่าสุด';
-    if (_selectedFilter == DateRangeFilter.last3Months)
+    }
+    if (_selectedFilter == DateRangeFilter.last3Months) {
       title = 'ภาพรวมความดัน 3 เดือนล่าสุด';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
