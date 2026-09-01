@@ -1,15 +1,17 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:printing/printing.dart';
+import 'package:image_picker/image_picker.dart';
+import '../config/app_config.dart';
 import '../services/pdf_export_service.dart';
 import '../services/patient_profile_service.dart';
 import '../services/patient_database_service.dart';
 import '../services/vital_repository.dart';
+import '../services/voice_health_service.dart';
 
 enum HistoryViewState { loading, success, empty, error }
-
 enum DateRangeFilter { last7Days, last1Month, last3Months }
-
 enum DisplayTab { vitals, labs }
 
 class HealthHistoryScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   final PatientProfileService _profileService = PatientProfileService();
   final VitalRepository _vitalRepository = VitalRepository();
   final PatientDatabaseService _dbService = PatientDatabaseService();
+  late VoiceHealthService _voiceService;
   final supabase = Supabase.instance.client;
 
   HistoryViewState _viewState = HistoryViewState.loading;
@@ -32,6 +35,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   List<Map<String, dynamic>> _vitalHistory = [];
   List<Map<String, dynamic>> _labHistory = [];
   String _errorMessage = '';
+  bool _isProcessingLab = false;
 
   // 🎨 Palette สีหลักตาม Design System
   static const Color creamBgColor = Color(0xFFFFF8F0);
@@ -45,6 +49,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _voiceService = VoiceHealthService(AppConfig.geminiApiKey);
     _loadData();
   }
 
@@ -89,6 +94,233 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     }
   }
 
+  // 🔬 1. ฟังก์ชันเปิดกล้องถ่ายใบแล็บ & สกัดค่าด้วย AI
+  Future<void> _scanLabReport() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 70,
+    );
+
+    if (image == null) return;
+    File imageFile = File(image.path);
+
+    setState(() => _isProcessingLab = true);
+
+    try {
+      final labData = await _voiceService.processLabReportImage(imageFile);
+
+      if (labData != null && mounted) {
+        _showConfirmLabDialog(labData, imageFile);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('AI ไม่สามารถอ่านใบแล็บได้ กรุณาถ่ายภาพให้ชัดเจนขึ้น'),
+              backgroundColor: Color(0xFFD97B4F),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาด: $e'),
+            backgroundColor: dangerColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessingLab = false);
+    }
+  }
+
+  // 🔬 2. หน้าต่างตรวจสอบและยืนยันค่าแล็บก่อนบันทึก
+  void _showConfirmLabDialog(Map<String, dynamic> labData, File imageFile) {
+    final double tcVal = (labData['total_cholesterol'] as num?)?.toDouble() ?? 0.0;
+    final double hdlVal = (labData['hdl'] as num?)?.toDouble() ?? 0.0;
+    final double ldlVal = (labData['ldl'] as num?)?.toDouble() ?? 0.0;
+    final double fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble() ?? 0.0;
+    final double crVal = (labData['creatinine'] as num?)?.toDouble() ?? 0.0;
+
+    final tcCtrl = TextEditingController(text: tcVal > 0 ? tcVal.toString() : '');
+    final hdlCtrl = TextEditingController(text: hdlVal > 0 ? hdlVal.toString() : '');
+    final ldlCtrl = TextEditingController(text: ldlVal > 0 ? ldlVal.toString() : '');
+    final fbsCtrl = TextEditingController(text: fbsVal > 0 ? fbsVal.toString() : '');
+    final crCtrl = TextEditingController(text: crVal > 0 ? crVal.toString() : '');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.science_rounded, color: emeraldTheme),
+            SizedBox(width: 8),
+            Text(
+              'ตรวจสอบผลตรวจเลือด (Lab)',
+              style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.file(
+                    imageFile,
+                    height: 130,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'AI ได้ดึงค่าตัวเลขจากใบแล็บ กรุณาตรวจสอบความถูกต้อง',
+                  style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: tcCtrl,
+                  style: const TextStyle(color: primaryTextColor),
+                  decoration: _dialogInputDecoration('Total Cholesterol (mg/dL)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: hdlCtrl,
+                  style: const TextStyle(color: primaryTextColor),
+                  decoration: _dialogInputDecoration('HDL (mg/dL)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: ldlCtrl,
+                  style: const TextStyle(color: primaryTextColor),
+                  decoration: _dialogInputDecoration('LDL (mg/dL)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: fbsCtrl,
+                  style: const TextStyle(color: primaryTextColor),
+                  decoration: _dialogInputDecoration('Fasting Blood Sugar (mg/dL)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: crCtrl,
+                  style: const TextStyle(color: primaryTextColor),
+                  decoration: _dialogInputDecoration('Creatinine (mg/dL)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: emeraldTheme,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _saveLabResult(
+                double.tryParse(tcCtrl.text) ?? 0.0,
+                double.tryParse(hdlCtrl.text) ?? 0.0,
+                double.tryParse(ldlCtrl.text) ?? 0.0,
+                double.tryParse(fbsCtrl.text) ?? 0.0,
+                double.tryParse(crCtrl.text) ?? 0.0,
+                imageFile,
+              );
+            },
+            child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _dialogInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: secondaryTextColor, fontSize: 13),
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEADBCE)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEADBCE)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: emeraldTheme, width: 1.5),
+      ),
+    );
+  }
+
+  // 🔬 3. บันทึกผลแล็บลงตาราง lab_results ใน Supabase
+  Future<void> _saveLabResult(double tc, double hdl, double ldl, double fbs, double cr, File imageFile) async {
+    setState(() => _viewState = HistoryViewState.loading);
+    try {
+      final patientId = await _profileService.getCurrentPatientId();
+      if (patientId == null) throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
+
+      final imagePath = await _dbService.uploadMedicationImage(imageFile, patientId);
+
+      await _dbService.saveLabResult(
+        patientId: patientId,
+        totalCholesterol: tc,
+        hdl: hdl,
+        ldl: ldl,
+        fastingBloodSugar: fbs,
+        creatinine: cr,
+        imageUrl: imagePath,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('บันทึกผลแล็บสำเร็จ! พร้อมนำไปคำนวณความเสี่ยงสุขภาพ'),
+            backgroundColor: emeraldTheme,
+          ),
+        );
+      }
+      _loadData();
+    } catch (e) {
+      if (mounted) {
+        _loadData();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการบันทึก: $e'),
+            backgroundColor: dangerColor,
+          ),
+        );
+      }
+    }
+  }
+
   // 🗑️ ฟังก์ชันลบข้อมูลความดันออกจากตาราง vital_signs ใน Supabase
   Future<void> _deleteVitalRecord(dynamic recordId) async {
     if (recordId == null) return;
@@ -114,8 +346,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             ),
             backgroundColor: emeraldTheme,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -127,8 +358,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             content: Text('เกิดข้อผิดพลาดในการลบข้อมูล: $e'),
             backgroundColor: dangerColor,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
@@ -140,8 +370,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     final int? sys = (item['systolic'] as num?)?.toInt();
     final int? dia = (item['diastolic'] as num?)?.toInt();
     final String recordedAt =
-        item['recorded_at']?.toString().substring(0, 16).replaceAll('T', ' ') ??
-            '';
+        item['recorded_at']?.toString().substring(0, 16).replaceAll('T', ' ') ?? '';
 
     showDialog(
       context: context,
@@ -196,8 +425,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                         ),
                         Text(
                           recordedAt,
-                          style: const TextStyle(
-                              fontSize: 12, color: mutedTextColor),
+                          style: const TextStyle(fontSize: 12, color: mutedTextColor),
                         ),
                       ],
                     ),
@@ -215,8 +443,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
+            child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -231,8 +458,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
               Navigator.pop(ctx);
               _deleteVitalRecord(item['id']);
             },
-            child: const Text('ยืนยันลบ',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('ยืนยันลบ', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -251,10 +477,8 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
       final height = profile?['height'];
       final diseases = profile?['underlying_diseases'];
       String filterText = '7 วันย้อนหลัง';
-      if (_selectedFilter == DateRangeFilter.last1Month)
-        filterText = '1 เดือนย้อนหลัง';
-      if (_selectedFilter == DateRangeFilter.last3Months)
-        filterText = '3 เดือนย้อนหลัง';
+      if (_selectedFilter == DateRangeFilter.last1Month) filterText = '1 เดือนย้อนหลัง';
+      if (_selectedFilter == DateRangeFilter.last3Months) filterText = '3 เดือนย้อนหลัง';
 
       final pdfBytes = await PdfExportService.generateHealthReport(
         patientName: patientName,
@@ -372,8 +596,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          label:
-                              const Center(child: Text('สัญญาณชีพ (Vitals)')),
+                          label: const Center(child: Text('สัญญาณชีพ (Vitals)')),
                           selected: _currentTab == DisplayTab.vitals,
                           selectedColor: emeraldTheme,
                           backgroundColor: Colors.transparent,
@@ -387,16 +610,14 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                             fontSize: 13,
                           ),
                           onSelected: (selected) {
-                            if (selected)
-                              setState(() => _currentTab = DisplayTab.vitals);
+                            if (selected) setState(() => _currentTab = DisplayTab.vitals);
                           },
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: ChoiceChip(
-                          label:
-                              const Center(child: Text('ผลแล็บ (Lab Reports)')),
+                          label: const Center(child: Text('ผลแล็บ (Lab Reports)')),
                           selected: _currentTab == DisplayTab.labs,
                           selectedColor: emeraldTheme,
                           backgroundColor: Colors.transparent,
@@ -410,8 +631,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                             fontSize: 13,
                           ),
                           onSelected: (selected) {
-                            if (selected)
-                              setState(() => _currentTab = DisplayTab.labs);
+                            if (selected) setState(() => _currentTab = DisplayTab.labs);
                           },
                         ),
                       ),
@@ -423,12 +643,9 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildFilterChip(
-                          '7 วันล่าสุด', DateRangeFilter.last7Days),
-                      _buildFilterChip(
-                          '1 เดือนล่าสุด', DateRangeFilter.last1Month),
-                      _buildFilterChip(
-                          '3 เดือนล่าสุด', DateRangeFilter.last3Months),
+                      _buildFilterChip('7 วันล่าสุด', DateRangeFilter.last7Days),
+                      _buildFilterChip('1 เดือนล่าสุด', DateRangeFilter.last1Month),
+                      _buildFilterChip('3 เดือนล่าสุด', DateRangeFilter.last3Months),
                     ],
                   ),
                 ],
@@ -441,6 +658,27 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
           ),
         ],
       ),
+
+      // 📸 ปุ่มลอยสแกนใบแล็บ (จะแสดงขึ้นมาเฉพาะตอนเลือกแท็บ "ผลแล็บ")
+      floatingActionButton: _currentTab == DisplayTab.labs
+          ? FloatingActionButton.extended(
+              backgroundColor: emeraldTheme,
+              elevation: 3,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              onPressed: _isProcessingLab ? null : _scanLabReport,
+              icon: _isProcessingLab
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Icon(Icons.camera_alt_rounded, color: Colors.white),
+              label: Text(
+                _isProcessingLab ? 'กำลังอ่านใบแล็บ...' : 'ถ่ายรูปใบแล็บ',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            )
+          : null,
     );
   }
 
@@ -625,7 +863,6 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // 🗑️ ปุ่มลบเวกเตอร์ (Pure Canvas Vector) ป้องกัน Tree-shaking 100%
                         InkWell(
                           onTap: () => _confirmDeleteDialog(item),
                           borderRadius: BorderRadius.circular(20),
@@ -713,12 +950,13 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     } else {
       if (_labHistory.isEmpty) {
         return const Center(
-          child: Text('ยังไม่มีประวัติผลตรวจแล็บในระบบ',
-              style: TextStyle(color: secondaryTextColor)),
+          child: Text('ยังไม่มีประวัติผลตรวจแล็บในระบบ\nกดปุ่ม "ถ่ายรูปใบแล็บ" ด้านล่างเพื่อเพิ่มข้อมูล',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: secondaryTextColor, height: 1.5)),
         );
       }
       return ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 85),
         itemCount: _labHistory.length,
         itemBuilder: (context, index) {
           final lab = _labHistory[index];
@@ -1017,7 +1255,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
 }
 
 // =========================================================================
-// 🗑️ Pure Vector Canvas: ไอคอนรูปถังขยะ (Trash Can Vector) ป้องกัน Tree-shaking
+// 🗑️ Pure Vector Canvas: ไอคอนรูปถังขยะ
 // =========================================================================
 class _TrashCanVectorIcon extends StatelessWidget {
   final double size;
@@ -1057,14 +1295,13 @@ class _TrashCanPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    // 1. ฝาถังขยะ (Lid)
+    // 1. ฝาถังขยะ
     canvas.drawLine(
       Offset(w * 0.12, h * 0.28),
       Offset(w * 0.88, h * 0.28),
       strokePaint,
     );
 
-    // หูจับฝาด้านบน
     final handlePath = Path()
       ..moveTo(w * 0.36, h * 0.28)
       ..lineTo(w * 0.36, h * 0.12)
@@ -1072,7 +1309,7 @@ class _TrashCanPainter extends CustomPainter {
       ..lineTo(w * 0.64, h * 0.28);
     canvas.drawPath(handlePath, strokePaint);
 
-    // 2. ตัวถังขยะ (Can Body)
+    // 2. ตัวถังขยะ
     final bodyPath = Path()
       ..moveTo(w * 0.22, h * 0.28)
       ..lineTo(w * 0.28, h * 0.84)
@@ -1082,7 +1319,7 @@ class _TrashCanPainter extends CustomPainter {
       ..lineTo(w * 0.78, h * 0.28);
     canvas.drawPath(bodyPath, strokePaint);
 
-    // 3. เส้นขีดแนวตั้งในถัง 2 เส้น
+    // 3. เส้นขีดในถัง
     canvas.drawLine(
       Offset(w * 0.41, h * 0.44),
       Offset(w * 0.41, h * 0.78),
