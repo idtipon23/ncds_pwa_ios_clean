@@ -92,7 +92,6 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     setState(() => _isProcessingImage = true);
 
     try {
-      // อ่านข้อมูลเป็น Bytes โดยตรง ป้องกัน Error บน Web
       final Uint8List rawBytes = await image.readAsBytes();
       final Uint8List imageBytes = await _prepareLabImageBytes(rawBytes);
       final labData = await _voiceService.processLabReportImage(imageBytes);
@@ -123,19 +122,19 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     }
   }
 
-  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก (ใช้ Image.memory)
+  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก
   void _showConfirmLabDialog(Map<String, dynamic> labData, Uint8List imageBytes) {
-    final double tcVal = (labData['total_cholesterol'] as num?)?.toDouble() ?? 0.0;
-    final double hdlVal = (labData['hdl'] as num?)?.toDouble() ?? 0.0;
-    final double ldlVal = (labData['ldl'] as num?)?.toDouble() ?? 0.0;
-    final double fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble() ?? 0.0;
-    final double crVal = (labData['creatinine'] as num?)?.toDouble() ?? 0.0;
+    final double? tcVal = (labData['total_cholesterol'] as num?)?.toDouble();
+    final double? hdlVal = (labData['hdl'] as num?)?.toDouble();
+    final double? ldlVal = (labData['ldl'] as num?)?.toDouble();
+    final double? fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble();
+    final double? crVal = (labData['creatinine'] as num?)?.toDouble();
 
-    final tcCtrl = TextEditingController(text: tcVal > 0 ? tcVal.toString() : '');
-    final hdlCtrl = TextEditingController(text: hdlVal > 0 ? hdlVal.toString() : '');
-    final ldlCtrl = TextEditingController(text: ldlVal > 0 ? ldlVal.toString() : '');
-    final fbsCtrl = TextEditingController(text: fbsVal > 0 ? fbsVal.toString() : '');
-    final crCtrl = TextEditingController(text: crVal > 0 ? crVal.toString() : '');
+    final tcCtrl = TextEditingController(text: (tcVal != null && tcVal > 0) ? tcVal.toString() : '');
+    final hdlCtrl = TextEditingController(text: (hdlVal != null && hdlVal > 0) ? hdlVal.toString() : '');
+    final ldlCtrl = TextEditingController(text: (ldlVal != null && ldlVal > 0) ? ldlVal.toString() : '');
+    final fbsCtrl = TextEditingController(text: (fbsVal != null && fbsVal > 0) ? fbsVal.toString() : '');
+    final crCtrl = TextEditingController(text: (crVal != null && crVal > 0) ? crVal.toString() : '');
 
     showDialog(
       context: context,
@@ -227,12 +226,12 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await _saveLabResult(
-                double.tryParse(tcCtrl.text) ?? 0.0,
-                double.tryParse(hdlCtrl.text) ?? 0.0,
-                double.tryParse(ldlCtrl.text) ?? 0.0,
-                double.tryParse(fbsCtrl.text) ?? 0.0,
-                double.tryParse(crCtrl.text) ?? 0.0,
-                imageBytes,
+                totalCholesterol: double.tryParse(tcCtrl.text.trim()),
+                hdl: double.tryParse(hdlCtrl.text.trim()),
+                ldl: double.tryParse(ldlCtrl.text.trim()),
+                fastingBloodSugar: double.tryParse(fbsCtrl.text.trim()),
+                creatinine: double.tryParse(crCtrl.text.trim()),
+                imageBytes: imageBytes,
               );
             },
             child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -265,15 +264,15 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     );
   }
 
-  // 4. บันทึกผลแล็บลง Database (ส่ง Bytes ไปอัปโหลด)
-  Future<void> _saveLabResult(
-    double tc,
-    double hdl,
-    double ldl,
-    double fbs,
-    double cr,
-    Uint8List imageBytes,
-  ) async {
+  // 4. บันทึกผลแล็บลง Database
+  Future<void> _saveLabResult({
+    double? totalCholesterol,
+    double? hdl,
+    double? ldl,
+    double? fastingBloodSugar,
+    double? creatinine,
+    required Uint8List imageBytes,
+  }) async {
     setState(() => _isLoading = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
@@ -283,11 +282,11 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
 
       await _dbService.saveLabResult(
         patientId: patientId,
-        totalCholesterol: tc,
+        totalCholesterol: totalCholesterol,
         hdl: hdl,
         ldl: ldl,
-        fastingBloodSugar: fbs,
-        creatinine: cr,
+        fastingBloodSugar: fastingBloodSugar,
+        creatinine: creatinine,
         imageUrl: imagePath,
       );
 
