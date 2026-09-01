@@ -8,7 +8,7 @@ import 'patient_profile_service.dart';
 
 class VoiceHealthService {
   final String apiKey;
-  late final GenerativeModel _model;
+  GenerativeModel? _model;
   final PatientProfileService _profileService = PatientProfileService();
   final FlutterTts _flutterTts = FlutterTts();
   bool _isTtsReady = false;
@@ -87,17 +87,54 @@ class VoiceHealthService {
   );
 
   VoiceHealthService(this.apiKey) {
-    _model = GenerativeModel(
-      model: 'gemini-3.6-flash',
-      apiKey: apiKey,
-      systemInstruction: Content.system(_systemPrompt),
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        responseSchema: _healthDataSchema,
-        temperature: 0.1,
-      ),
-    );
+    if (!kIsWeb) {
+      _model = GenerativeModel(
+        model: 'gemini-3.5-flash-lite',
+        apiKey: apiKey,
+        systemInstruction: Content.system(_systemPrompt),
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+          responseSchema: _healthDataSchema,
+          temperature: 0.1,
+        ),
+      );
+    }
     _initTts();
+  }
+
+  Future<Map<String, dynamic>?> _proxyStructuredJson({
+    required String serviceType,
+    required String prompt,
+    Uint8List? imageBytes,
+    String mimeType = 'image/jpeg',
+    Map<String, dynamic>? contextData,
+  }) async {
+    try {
+      final responseText = await AiProxyService().generateContent(
+        serviceType: serviceType,
+        prompt: prompt,
+        structured: true,
+        contextData: contextData,
+        fileData: imageBytes == null
+            ? null
+            : {
+                'mime_type': mimeType,
+                'data': base64Encode(imageBytes),
+              },
+      );
+
+      if (responseText.isEmpty) return null;
+
+      final cleanedJson = responseText
+          .replaceAll('```json', '')
+          .replaceAll('```', '')
+          .trim();
+
+      return jsonDecode(cleanedJson) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('Proxy structured JSON error: $e');
+      return null;
+    }
   }
 
   Future<void> _initTts() async {
@@ -136,9 +173,19 @@ class VoiceHealthService {
       final profileContext = await _profileService.getProfilePromptContext();
       final prompt = 'ข้อความ: "$speechText"\nบริบท: $profileContext\nสกัดค่าสุขภาพเป็น JSON';
 
-      final response = await _model.generateContent([Content.text(prompt)]);
+      if (kIsWeb) {
+        return await _proxyStructuredJson(
+          serviceType: 'consult',
+          prompt: prompt,
+          contextData: {'speech_text': speechText},
+        );
+      }
+
+      if (_model == null) return null;
+
+      final response = await _model!.generateContent([Content.text(prompt)]);
       final text = response.text;
-      
+
       if (text != null && text.isNotEmpty) {
         String cleanedJson = text
             .replaceAll('```json', '')
@@ -160,6 +207,17 @@ class VoiceHealthService {
       final extension = imageFile.path.split('.').last.toLowerCase();
       final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
 
+      if (kIsWeb) {
+        return await _proxyStructuredJson(
+          serviceType: 'consult',
+          prompt: 'สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON',
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+      }
+
+      if (_model == null) return null;
+
       final content = [
         Content.multi([
           TextPart('สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON'),
@@ -167,9 +225,9 @@ class VoiceHealthService {
         ])
       ];
 
-      final response = await _model.generateContent(content);
+      final response = await _model!.generateContent(content);
       final text = response.text;
-      
+
       if (text != null && text.isNotEmpty) {
         String cleanedJson = text
             .replaceAll('```json', '')
@@ -186,105 +244,137 @@ class VoiceHealthService {
 
   // 📍 ฟังก์ชันสกัดข้อมูลใบแล็บ (ใช้ Supabase Edge Function proxy เพื่อให้ PWA/Web ทำงานได้)
   Future<Map<String, dynamic>?> processLabReportImage(
-  Uint8List imageBytes, {
-  String mimeType = 'image/jpeg',
-}) async {
-  try {
-    final visionModel = GenerativeModel(
-      model: 'gemini-3.6-flash',
-      apiKey: apiKey,
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-      ),
-    );
-
-    final content = [
-      Content.multi([
-        TextPart(
-          'สกัดค่าตัวเลขผลแล็บจากรูปภาพนี้เป็น JSON (หากไม่มีให้เป็น null):\n'
-          '{\n'
-          '  "total_cholesterol": number หรือ null,\n'
-          '  "hdl": number หรือ null,\n'
-          '  "ldl": number หรือ null,\n'
-          '  "triglyceride": number หรือ null,\n'
-          '  "fasting_blood_sugar": number หรือ null,\n'
-          '  "hba1c": number หรือ null,\n'
-          '  "creatinine": number หรือ null,\n'
-          '  "bun": number หรือ null,\n'
-          '  "egfr": number หรือ null,\n'
-          '  "sgpt": number หรือ null,\n'
-          '  "uric_acid": number หรือ null\n'
-          '}',
-        ),
-        DataPart(mimeType, imageBytes),
-      ])
-    ];
-
-    final response = await visionModel.generateContent(content);
-    final text = response.text;
-
-    if (text != null && text.isNotEmpty) {
-      String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
-      return jsonDecode(cleanedJson) as Map<String, dynamic>;
-    }
-    return null;
-  } catch (e) {
-    debugPrint('Lab Report OCR Error: $e');
-    return null;
-  }
-}
-
-    // ค้นหาใน voice_health_service.dart
-  Future<Map<String, dynamic>?> processDrugLabelImage(File imageFile) async {
-    final imageBytes = await imageFile.readAsBytes();
-    final extension = imageFile.path.split('.').last.toLowerCase();
-    final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
-
-    final visionModel = GenerativeModel(
-      model: 'gemini-3.6-flash',
-      apiKey: apiKey,
-      generationConfig: GenerationConfig(
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-      ),
-    );
-
-    final content = [
-      Content.multi([
-        TextPart(
-            'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
-            '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
-            'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00'),
-        DataPart(mimeType, imageBytes),
-      ])
-    ];
-
-    // 🟢 ทำ Auto-Retry สูงสุด 2 รอบ ป้องกัน 503 ชั่วคราว
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        final response = await visionModel.generateContent(content);
-        final text = response.text;
-
-        if (text != null && text.isNotEmpty) {
-          String cleanedJson = text
-              .replaceAll('```json', '')
-              .replaceAll('```', '')
-              .trim();
-          return jsonDecode(cleanedJson) as Map<String, dynamic>;
-        }
-        return null;
-      } catch (e) {
-        final errStr = e.toString();
-        if ((errStr.contains('503') || errStr.contains('UNAVAILABLE') || errStr.contains('429')) && attempt < 2) {
-          debugPrint('⚠️ Gemini 503 High Demand -> Retry attempt $attempt...');
-          await Future.delayed(const Duration(seconds: 1));
-          continue;
-        }
-        debugPrint('❌ Error processDrugLabelImage: $e');
-        return null;
+    Uint8List imageBytes, {
+    String mimeType = 'image/jpeg',
+  }) async {
+    try {
+      if (kIsWeb) {
+        return await _proxyStructuredJson(
+          serviceType: 'lab',
+          prompt:
+              'สกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine จากใบแล็บนี้เป็น JSON รูปแบบนี้:\n'
+              '{\n'
+              '  "total_cholesterol": number หรือ null,\n'
+              '  "hdl": number หรือ null,\n'
+              '  "ldl": number หรือ null,\n'
+              '  "fasting_blood_sugar": number หรือ null,\n'
+              '  "creatinine": number หรือ null\n'
+              '}',
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
       }
+
+      final visionModel = GenerativeModel(
+        model: 'gemini-3.5-flash-lite',
+        apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        ),
+      );
+
+      final content = [
+        Content.multi([
+          TextPart(
+            'สกัดค่าตัวเลขผลแล็บจากรูปภาพนี้เป็น JSON (หากไม่มีให้เป็น null):\n'
+            '{\n'
+            '  "total_cholesterol": number หรือ null,\n'
+            '  "hdl": number หรือ null,\n'
+            '  "ldl": number หรือ null,\n'
+            '  "triglyceride": number หรือ null,\n'
+            '  "fasting_blood_sugar": number หรือ null,\n'
+            '  "hba1c": number หรือ null,\n'
+            '  "creatinine": number หรือ null,\n'
+            '  "bun": number หรือ null,\n'
+            '  "egfr": number หรือ null,\n'
+            '  "sgpt": number หรือ null,\n'
+            '  "uric_acid": number หรือ null\n'
+            '}',
+          ),
+          DataPart(mimeType, imageBytes),
+        ])
+      ];
+
+      final response = await visionModel.generateContent(content);
+      final text = response.text;
+
+      if (text != null && text.isNotEmpty) {
+        String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
+        return jsonDecode(cleanedJson) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Lab Report OCR Error: $e');
+      return null;
     }
-    return null;
+  }
+
+  Future<Map<String, dynamic>?> processDrugLabelImage(File imageFile) async {
+    try {
+      final imageBytes = await imageFile.readAsBytes();
+      final extension = imageFile.path.split('.').last.toLowerCase();
+      final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
+
+      if (kIsWeb) {
+        return await _proxyStructuredJson(
+          serviceType: 'consult',
+          prompt:
+              'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
+              '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
+              'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00',
+          imageBytes: imageBytes,
+          mimeType: mimeType,
+        );
+      }
+
+      final visionModel = GenerativeModel(
+        model: 'gemini-3.5-flash-lite',
+        apiKey: apiKey,
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        ),
+      );
+
+      final content = [
+        Content.multi([
+          TextPart(
+              'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
+              '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
+              'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00'),
+          DataPart(mimeType, imageBytes),
+        ])
+      ];
+
+      for (int attempt = 1; attempt <= 2; attempt++) {
+        try {
+          final response = await visionModel.generateContent(content);
+          final text = response.text;
+
+          if (text != null && text.isNotEmpty) {
+            String cleanedJson = text
+                .replaceAll('```json', '')
+                .replaceAll('```', '')
+                .trim();
+            return jsonDecode(cleanedJson) as Map<String, dynamic>;
+          }
+          return null;
+        } catch (e) {
+          final errStr = e.toString();
+          if ((errStr.contains('503') || errStr.contains('UNAVAILABLE') || errStr.contains('429')) && attempt < 2) {
+            debugPrint('⚠️ Gemini 503 High Demand -> Retry attempt $attempt...');
+            await Future.delayed(const Duration(seconds: 1));
+            continue;
+          }
+          debugPrint('❌ Error processDrugLabelImage: $e');
+          return null;
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('❌ Error preparing drug label image: $e');
+      return null;
+    }
   }
 }

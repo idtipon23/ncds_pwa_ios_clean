@@ -153,7 +153,7 @@ serve(async (req) => {
     const systemInstructionText = getSystemInstruction(service_type, context_data);
     
     // ใช้โมเดลตามที่คุณกำหนดโดยเฉพาะ (ห้ามเปลี่ยน)
-    const models = ["gemini-3.5-flash-lite", "gemini-3.6-flash"];
+    const models = ["gemini-3.5-flash-lite", "gemini-3.7-flash"];
     let resultPayload = null;
     let lastError: any = null;
 
