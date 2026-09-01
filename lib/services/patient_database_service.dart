@@ -419,29 +419,54 @@ class PatientDatabaseService {
   
   // 2. บันทึกผลแล็บใหม่ (รองรับค่า Total Cholesterol สำหรับคำนวณ Thai CV Risk)
   Future<void> saveLabResult({
-    required String patientId,
-    required double totalCholesterol,
-    required double hdl,
-    required double ldl,
-    required double fastingBloodSugar,
-    required double creatinine,
-    String? imageUrl,
-  }) async {
-    try {
-      await _supabase.from('lab_results').insert({
-        'patient_id': patientId,
-        'total_cholesterol': totalCholesterol,
-        'hdl': hdl,
-        'ldl': ldl,
-        'fasting_blood_sugar': fastingBloodSugar,
-        'creatinine': creatinine,
-        'image_url': imageUrl,
-        'test_date': DateTime.now().toIso8601String(),
-      });
-    } catch (e) {
-      throw Exception('ไม่สามารถบันทึกผลแล็บได้: $e');
+  required String patientId,
+  double? totalCholesterol,
+  double? hdl,
+  double? ldl,
+  double? triglyceride,
+  double? fastingBloodSugar,
+  double? hba1c,
+  double? creatinine,
+  double? bun,
+  double? egfr,
+  double? sgpt,
+  double? uricAcid,
+  String? imageUrl,
+}) async {
+  try {
+    final Map<String, dynamic> data = {
+      'patient_id': patientId,
+      'test_date': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    // Helper เช็คค่า > 0
+    void addIfValid(String key, double? val) {
+      if (val != null && val > 0) data[key] = val;
     }
+
+    addIfValid('total_cholesterol', totalCholesterol);
+    addIfValid('hdl', hdl);
+    addIfValid('ldl', ldl);
+    addIfValid('triglyceride', triglyceride);
+    addIfValid('fasting_blood_sugar', fastingBloodSugar);
+    addIfValid('hba1c', hba1c);
+    addIfValid('creatinine', creatinine);
+    addIfValid('bun', bun);
+    addIfValid('egfr', egfr);
+    addIfValid('sgpt', sgpt);
+    addIfValid('uric_acid', uricAcid);
+
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      data['image_url'] = imageUrl;
+    }
+
+    await _supabase.from('lab_results').insert(data);
+    debugPrint('✅ บันทึกผลแล็บลง Supabase สำเร็จ: $data');
+  } catch (e) {
+    debugPrint('❌ Error saveLabResult: $e');
+    rethrow;
   }
+}
   // ==========================================
   // ส่วนที่ 1: จัดการลบและบันทึกออกกำลังกาย
   // ==========================================

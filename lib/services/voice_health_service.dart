@@ -186,41 +186,54 @@ class VoiceHealthService {
 
   // 📍 ฟังก์ชันสกัดข้อมูลใบแล็บ (ใช้ Supabase Edge Function proxy เพื่อให้ PWA/Web ทำงานได้)
   Future<Map<String, dynamic>?> processLabReportImage(
-    Uint8List imageBytes, {
-    String mimeType = 'image/jpeg',
-  }) async {
-    try {
-      final encoded = base64Encode(imageBytes);
-      final responseText = await AiProxyService().generateContent(
-        serviceType: 'lab',
-        prompt:
-            'สกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine จากใบแล็บนี้เป็น JSON รูปแบบนี้:\n'
-            '{\n'
-            '  "total_cholesterol": number หรือ null,\n'
-            '  "hdl": number หรือ null,\n'
-            '  "ldl": number หรือ null,\n'
-            '  "fasting_blood_sugar": number หรือ null,\n'
-            '  "creatinine": number หรือ null\n'
-            '}',
-        fileData: {
-          'mime_type': mimeType,
-          'data': encoded,
-        },
-      );
+  Uint8List imageBytes, {
+  String mimeType = 'image/jpeg',
+}) async {
+  try {
+    final visionModel = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: apiKey,
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      ),
+    );
 
-      if (responseText.isEmpty) return null;
+    final content = [
+      Content.multi([
+        TextPart(
+          'สกัดค่าตัวเลขผลแล็บจากรูปภาพนี้เป็น JSON (หากไม่มีให้เป็น null):\n'
+          '{\n'
+          '  "total_cholesterol": number หรือ null,\n'
+          '  "hdl": number หรือ null,\n'
+          '  "ldl": number หรือ null,\n'
+          '  "triglyceride": number หรือ null,\n'
+          '  "fasting_blood_sugar": number หรือ null,\n'
+          '  "hba1c": number หรือ null,\n'
+          '  "creatinine": number หรือ null,\n'
+          '  "bun": number หรือ null,\n'
+          '  "egfr": number หรือ null,\n'
+          '  "sgpt": number หรือ null,\n'
+          '  "uric_acid": number หรือ null\n'
+          '}',
+        ),
+        DataPart(mimeType, imageBytes),
+      ])
+    ];
 
-      final cleanedJson = responseText
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
+    final response = await visionModel.generateContent(content);
+    final text = response.text;
 
+    if (text != null && text.isNotEmpty) {
+      String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
       return jsonDecode(cleanedJson) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('Lab Report OCR Error: $e');
-      return null;
     }
+    return null;
+  } catch (e) {
+    debugPrint('Lab Report OCR Error: $e');
+    return null;
   }
+}
 
     // ค้นหาใน voice_health_service.dart
   Future<Map<String, dynamic>?> processDrugLabelImage(File imageFile) async {
