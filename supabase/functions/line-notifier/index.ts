@@ -7,36 +7,25 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-// 🕒 ฟังก์ชันคำนวณจุดเริ่มต้นของวันปัจจุบันตามเวลาประเทศไทย (Asia/Bangkok UTC+7)
-function getBangkokStartOfDayUtc(): string {
-  const now = new Date()
-  // ดึงวันที่ปัจจุบันตามโซนเวลาประเทศไทย (YYYY-MM-DD)
-  const bkkDateStr = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now)
-
-  // แปลงเวลา 00:00:00 น. ของไทย ให้เป็น ISO String (UTC) สำหรับค้นหาในฐานข้อมูล
-  return new Date(`${bkkDateStr}T00:00:00+07:00`).toISOString()
-}
-
 serve(async (req) => {
   try {
-    const { action, mealType } = await req.json()
+    const { action, mealType } = await req.json().catch(() => ({ action: 'check_dynamic' }))
+    console.log(`[Trigger Received]: Action = ${action}`)
 
-    if (action === 'check_medications') {
-      await sendMedicationReminders(mealType)
+    let result: any = null
+
+    if (action === 'check_dynamic' || action === 'check_medications') {
+      result = await checkDynamicMedications()
     } else if (action === 'check_bp_inactivity') {
-      await sendBpInactivityAlerts()
+      result = await sendBpInactivityAlerts()
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, details: result }), {
       headers: { "Content-Type": "application/json" },
       status: 200,
     })
   } catch (error: any) {
+    console.error("[Fatal Error]:", error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { "Content-Type": "application/json" },
       status: 500,
@@ -44,11 +33,30 @@ serve(async (req) => {
   }
 })
 
-// 💊 1. ระบบตรวจเช็กและแจ้งเตือนมื้อยาตามเวลาไทย
-async function sendMedicationReminders(mealType: string) {
-  const activeCol = `is_${mealType}_active`
-  const startOfDayUtc = getBangkokStartOfDayUtc()
+// 🕒 ระบบตรวจเช็กมื้อยาตามเวลาอิสระระดับนาที (Bangkok Time)
+async function checkDynamicMedications() {
+  const now = new Date()
 
+  // 1. ดึงเวลาและวันที่ปัจจุบันของไทย (HH:mm และ YYYY-MM-DD)
+  const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+
+  const currentBkkTime = timeFormatter.format(now) // เช่น "08:31"
+  const currentBkkDate = dateFormatter.format(now) // เช่น "2026-09-01"
+
+  console.log(`[Dynamic Check] Current BKK Time: ${currentBkkTime} | Date: ${currentBkkDate}`)
+
+  // 2. ดึงรายการยาทั้งหมดที่ผู้ป่วยเชื่อม LINE ไว้
   const { data: meds, error } = await supabase
     .from('medication_logs')
     .select(`
@@ -56,40 +64,72 @@ async function sendMedicationReminders(mealType: string) {
       medication_name,
       dosage_instruction,
       patient_id,
+      is_morning_active,
+      time_morning,
+      is_noon_active,
+      time_noon,
+      is_evening_active,
+      time_evening,
       patients!inner ( id, line_user_id, first_name, line_recipient_role )
     `)
-    .eq(activeCol, true)
     .not('patients.line_user_id', 'is', null)
 
-  if (error || !meds) return
+  if (error) {
+    console.error("[Database Error]:", error.message)
+    return { error: error.message }
+  }
 
-  for (const med of meds) {
+  let matchedAndSent = 0
+
+  for (const med of meds || []) {
     const patient = med.patients as any
     const lineUserId = patient.line_user_id
 
-    // ตรวจสอบว่าในวันนี้ (นับตั้งแต่ 00:00 น. เวลาไทย) มีการกดยืนยันกินยาไปแล้วหรือยัง
-    const { data: adherence } = await supabase
-      .from('medication_adherence_logs')
-      .select('id')
-      .eq('patient_id', med.patient_id)
-      .eq('medication_id', med.id)
-      .gte('taken_at', startOfDayUtc)
-      .maybeSingle()
+    // ตรวจสอบทั้ง 3 มื้อ ว่ามื้อไหนตรงกับเวลาปัจจุบัน (currentBkkTime)
+    const activeMealsToAlert: { mealType: string; label: string }[] = []
 
-    if (!adherence && lineUserId) {
-      const mealLabel = mealType === 'morning' ? 'มื้อเช้า' : mealType === 'noon' ? 'มื้อกลางวัน' : 'มื้อเย็น'
+    if (med.is_morning_active && med.time_morning === currentBkkTime) {
+      activeMealsToAlert.push({ mealType: 'morning', label: 'มื้อเช้า' })
+    }
+    if (med.is_noon_active && med.time_noon === currentBkkTime) {
+      activeMealsToAlert.push({ mealType: 'noon', label: 'มื้อกลางวัน' })
+    }
+    if (med.is_evening_active && med.time_evening === currentBkkTime) {
+      activeMealsToAlert.push({ mealType: 'evening', label: 'มื้อเย็น' })
+    }
+
+    for (const meal of activeMealsToAlert) {
+      // 3. ตรวจสอบว่าเคยกดทานมื้อนี้ไปแล้วในวันนี้หรือไม่
+      const { data: adherence } = await supabase
+        .from('medication_adherence_logs')
+        .select('id')
+        .eq('patient_id', med.patient_id)
+        .eq('medication_id', med.id)
+        .eq('meal_type', meal.mealType)
+        .eq('taken_date', currentBkkDate)
+        .maybeSingle()
+
+      if (adherence) {
+        console.log(`[Skipped] ${patient.first_name} already took ${med.medication_name} (${meal.label}) today.`)
+        continue
+      }
+
+      // 4. ส่งข้อความเข้า LINE
       const isCaregiver = patient.line_recipient_role === 'caregiver'
-      
       const message = isCaregiver
-        ? `💊 [แจ้งเตือนผู้ดูแล] ถึงเวลาทานยา (${mealLabel})\n\nสวัสดีค่ะ กรุณาดูแลคุณ ${patient.first_name}\nทานยา: ${med.medication_name}\nวิธีใช้: ${med.dosage_instruction || 'ตามแพทย์สั่ง'}\n\nเปิดแอป NCDs เพื่อบันทึกการทานยานะคะ 😊`
-        : `💊 ได้เวลาทานยา (${mealLabel}) แล้วค่ะ\n\nสวัสดีค่ะ คุณ ${patient.first_name}\nอย่าลืมทานยา: ${med.medication_name}\nวิธีใช้: ${med.dosage_instruction || 'ตามแพทย์สั่ง'}\n\nเปิดแอป NCDs เพื่อกดบันทึกการทานยานะคะ 😊`
+        ? `💊 [แจ้งเตือนผู้ดูแล] ได้เวลาทานยา (${meal.label}) เวลา ${currentBkkTime} น.\n\nกรุณาช่วยดูแลคุณ ${patient.first_name || 'ผู้รับบริการ'}\nทานยา: ${med.medication_name}\nวิธีใช้: ${med.dosage_instruction || 'ตามแพทย์สั่ง'}\n\nเปิดแอป NCDs เพื่อบันทึกการทานยานะคะ 🌱`
+        : `💊 ได้เวลาทานยา (${meal.label}) เวลา ${currentBkkTime} น. แล้วค่ะ\n\nสวัสดีค่ะ คุณ ${patient.first_name || 'ผู้รับบริการ'}\nอย่าลืมทานยา: ${med.medication_name}\nวิธีใช้: ${med.dosage_instruction || 'ตามแพทย์สั่ง'}\n\nเปิดแอป NCDs เพื่อกดบันทึกการทานยานะคะ 🌱`
 
+      console.log(`[Sending LINE] -> ${patient.first_name} (${lineUserId}) for ${med.medication_name}`)
       await pushLineMessage(lineUserId, message)
+      matchedAndSent++
     }
   }
+
+  return { checked_time: currentBkkTime, messages_sent: matchedAndSent }
 }
 
-// 🩺 2. ระบบตรวจเช็กความดันที่ไม่ได้วัดเกิน 24 ชั่วโมง
+// 🩺 ตรวจสอบความดันค้างเกิน 24 ชม.
 async function sendBpInactivityAlerts() {
   const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
@@ -99,8 +139,9 @@ async function sendBpInactivityAlerts() {
     .eq('notify_bp_inactive', true)
     .not('line_user_id', 'is', null)
 
-  if (error || !patients) return
+  if (error || !patients) return { error: error?.message }
 
+  let sentCount = 0
   for (const patient of patients) {
     const { data: latestVital } = await supabase
       .from('vital_signs')
@@ -115,16 +156,21 @@ async function sendBpInactivityAlerts() {
     if (!lastRecordedAt || lastRecordedAt < cutoffTime) {
       const isCaregiver = patient.line_recipient_role === 'caregiver'
       const message = isCaregiver
-        ? `🩺 [แจ้งเตือนผู้ดูแล] แจ้งเตือนการวัดความดัน\n\nสวัสดีค่ะ คุณ ${patient.first_name} ยังไม่ได้บันทึกค่าความดันใน 24 ชม. ที่ผ่านมา\n\nกรุณาช่วยวัดและบันทึกผลลงระบบเพื่อติดตามสุขภาพนะคะ 🌱`
-        : `🩺 แจ้งเตือนการตรวจวัดความดัน\n\nสวัสดีค่ะ คุณ ${patient.first_name}\nคุณยังไม่ได้บันทึกค่าความดันโลหิตใน 24 ชั่วโมงที่ผ่านมา\n\nเพื่อการติดตามสุขภาพที่ต่อเนื่อง กรุณานั่งพัก 5 นาทีแล้ววัดความดันพร้อมบันทึกลงระบบนะคะ 🌱`
+        ? `🩺 [แจ้งเตือนผู้ดูแล] แจ้งเตือนการวัดความดัน\n\nคุณ ${patient.first_name || 'ผู้รับบริการ'} ยังไม่ได้บันทึกค่าความดันใน 24 ชม. ที่ผ่านมา\n\nกรุณาช่วยตรวจวัดและบันทึกลงระบบนะคะ 🌱`
+        : `🩺 แจ้งเตือนการตรวจวัดความดัน\n\nสวัสดีค่ะ คุณ ${patient.first_name || 'ผู้รับบริการ'}\nคุณยังไม่ได้บันทึกค่าความดันโลหิตใน 24 ชั่วโมงที่ผ่านมา\n\nกรุณานั่งพัก 5 นาทีแล้ววัดความดันพร้อมบันทึกลงระบบนะคะ 🌱`
 
       await pushLineMessage(patient.line_user_id, message)
+      sentCount++
     }
   }
+
+  return { inactive_patients_alerted: sentCount }
 }
 
 async function pushLineMessage(to: string, text: string) {
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  if (!LINE_CHANNEL_ACCESS_TOKEN) return { error: "Missing Token" }
+
+  const res = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -135,4 +181,6 @@ async function pushLineMessage(to: string, text: string) {
       messages: [{ type: 'text', text: text }],
     }),
   })
+
+  return { status: res.status, body: await res.text() }
 }
