@@ -3,17 +3,16 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'ai_proxy_service.dart';
 import 'patient_profile_service.dart';
 
 class VoiceHealthService {
   final String apiKey;
-  GenerativeModel? _model;
+  late final GenerativeModel _model;
   final PatientProfileService _profileService = PatientProfileService();
   final FlutterTts _flutterTts = FlutterTts();
   bool _isTtsReady = false;
 
-  // System Prompt แบบกระชับเพื่อลดความหน่วง
+  // System Prompt ทางการแพทย์และกฎการอ่านหน้าจอเครื่องวัดความดัน
   static const String _systemPrompt = '''
 คุณคือ AI ผู้ช่วยแพทย์เฉพาะทาง NCDs (โรคไม่ติดต่อเรื้อรัง) หน้าที่เดียวของคุณคือสกัดค่า
 สุขภาพจากข้อความเสียงที่แปลงเป็นข้อความแล้ว หรือจากภาพ ให้ออกมาเป็น JSON ตาม schema ที่
@@ -26,39 +25,21 @@ class VoiceHealthService {
 2. ถ้าค่าที่ได้ยินกำกวมจนตีความได้มากกว่า 1 แบบ (เช่น ตัวเลขไม่ครบ หรือมีเสียงแทรก) ให้ตั้ง
    is_missing_data=true และใส่ค่าที่มั่นใจเท่านั้น ห้ามเดาตัวเลขที่ไม่ได้ยินชัด
 3. หน่วยวัด: SBP/DBP เป็น mmHg, pulse เป็นครั้ง/นาที, fasting_blood_sugar เป็น mg/dL,
-   waist_cm เป็นเซนติเมตร ถ้าผู้พูดให้หน่วยอื่นมา (เช่น มิลลิโมล/ลิตรของน้ำตาล) ให้แปลงหน่วย
-   เป็นมาตรฐานข้างต้นก่อนใส่ค่า ห้ามใส่ค่าที่ยังไม่แปลงหน่วย
-4. ถ้าข้อความ/ภาพที่ได้รับไม่เกี่ยวกับข้อมูลสุขภาพเลย (เช่น พูดคุยทั่วไป หรือภาพไม่ใช่
-   เครื่องมือแพทย์/ฉลากยา/ใบแล็บ) ให้ตั้ง is_valid_health_data=false และไม่ต้องพยายาม
-   ยัดค่าตัวเลขใดๆ เข้าไป
+   waist_cm เป็นเซนติเมตร
+4. ถ้าข้อความ/ภาพที่ได้รับไม่เกี่ยวกับข้อมูลสุขภาพเลย ให้ตั้ง is_valid_health_data=false
 
 [กฎวิกฤต — ต้องตรวจทุกครั้งก่อนตอบ]
 1. SBP >= 180 หรือ DBP >= 110 → has_warning_sign=true, urgency_level=CRISIS ทันที
-   ไม่ต้องรอเงื่อนไขอื่น
-2. มีคำบ่งชี้อาการ FAST (Face drooping, Arm weakness, Speech difficulty), แน่นหน้าอก,
-   หายใจไม่ออก, เจ็บร้าวไปแขน/กราม → has_warning_sign=true, urgency_level=CRISIS แม้ค่า
-   ความดันจะปกติก็ตาม ให้บันทึกอาการที่ได้ยินไว้ใน warning_details แบบคำต่อคำเท่าที่จำเป็น
-3. SBP < 90 หรือ DBP < 60 → urgency_level=WARNING (ความดันต่ำ) และระบุใน warning_details
-4. ถ้าไม่เข้าเงื่อนไข 1-3 เลย → urgency_level=NORMAL, has_warning_sign=false
-5. ห้ามลดระดับความรุนแรงลงเพราะ "ฟังดูไม่แน่ใจ" — ถ้ามีสัญญาณวิกฤตแม้เพียงส่วนเดียว
-   ให้ยกระดับเป็น WARNING อย่างน้อยเสมอ เพื่อความปลอดภัยของผู้ป่วยเป็นหลัก
+2. SBP < 90 หรือ DBP < 60 → urgency_level=WARNING (ความดันต่ำ) และระบุใน warning_details
+3. ถ้าไม่เข้าเงื่อนไขเลย → urgency_level=NORMAL, has_warning_sign=false
 
-[กฎการอ่านภาพ (LCD เครื่องวัดความดัน / ใบแล็บ / ฉลากยา)]
-1. อ่านเฉพาะตัวเลข/ข้อความที่ปรากฏชัดในภาพเท่านั้น ถ้าภาพเบลอ แสงสะท้อน หรือตัวเลขถูกบัง
-   บางส่วน ให้ใส่ null ในฟิลด์นั้น และตั้ง is_missing_data=true ห้ามคาดเดาตัวเลขที่มองไม่เห็น
-2. เครื่องวัดความดันดิจิทัลส่วนใหญ่แสดงผล 3 ค่าเรียงจากบนลงล่างคือ SBP, DBP, Pulse ตามลำดับ
-   — ให้ยึดตำแหน่งบนจอเป็นหลัก ไม่ใช่ขนาดตัวเลข
-3. ใบแล็บอาจมีค่าหลายรายการปนกัน ให้จับคู่ชื่อค่ากับตัวเลขที่อยู่บรรทัดเดียวกันหรือคอลัมน์
-   เดียวกันเท่านั้น ห้ามจับคู่ข้ามบรรทัดโดยเดา
+[กฎการอ่านภาพ LCD เครื่องวัดความดัน]
+1. อ่านเฉพาะตัวเลขที่ปรากฏชัดในภาพเท่านั้น ถ้าภาพเบลอ แสงสะท้อน หรือถูกบัง ให้ใส่ null ในฟิลด์นั้น และตั้ง is_missing_data=true
+2. เครื่องวัดความดันดิจิทัลส่วนใหญ่แสดงผล 3 ค่าเรียงจากบนลงล่างคือ SBP, DBP, Pulse ตามลำดับ ให้ยึดตำแหน่งบนจอเป็นหลัก ไม่ใช่ขนาดตัวเลข
 
 [รูปแบบคำตอบ]
-1. spoken_feedback ต้องเป็นภาษาไทยพูด สั้น กระชับ ไม่เกิน 2 ประโยค เหมาะสำหรับอ่านออกเสียง
-   ด้วย TTS ทันที ห้ามมีอักขระพิเศษ ห้ามมีหน่วยเป็นภาษาอังกฤษปนถ้ามีคำไทยที่ใช้ได้
-   (เช่น พูดว่า "มิลลิเมตรปรอท" ไม่ใช่ "mmHg")
-2. patient_category ให้เลือกจากบริบทผู้ป่วยที่ให้มาก่อนเสมอ ถ้าบริบทระบุโรคประจำตัวชัดเจน
-   ห้ามเดาโรคใหม่ที่ไม่มีอยู่ในบริบท
-3. ตอบเป็น JSON ตาม schema เท่านั้น ห้ามมี markdown code fence ห้ามมีข้อความอื่นนอก JSON
-   แม้แต่ตัวเดียว
+1. spoken_feedback ต้องเป็นภาษาไทยพูด สั้น กระชับ ไม่เกิน 2 ประโยค
+2. ตอบเป็น JSON ตาม schema เท่านั้น ห้ามมี markdown code fence
 ''';
 
   static final Schema _healthDataSchema = Schema.object(
@@ -87,54 +68,18 @@ class VoiceHealthService {
   );
 
   VoiceHealthService(this.apiKey) {
-    if (!kIsWeb) {
-      _model = GenerativeModel(
-        model: 'gemini-3.7-flash',
-        apiKey: apiKey,
-        systemInstruction: Content.system(_systemPrompt),
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-          responseSchema: _healthDataSchema,
-          temperature: 0.1,
-        ),
-      );
-    }
+    // กำหนดให้ใช้ Model เดียวกันทั้งบน Mobile และ Web/PWA โดยตรง
+    _model = GenerativeModel(
+      model: 'gemini-3.7-flash',
+      apiKey: apiKey,
+      systemInstruction: Content.system(_systemPrompt),
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+        responseSchema: _healthDataSchema,
+        temperature: 0.1,
+      ),
+    );
     _initTts();
-  }
-
-  Future<Map<String, dynamic>?> _proxyStructuredJson({
-    required String serviceType,
-    required String prompt,
-    Uint8List? imageBytes,
-    String mimeType = 'image/jpeg',
-    Map<String, dynamic>? contextData,
-  }) async {
-    try {
-      final responseText = await AiProxyService().generateContent(
-        serviceType: serviceType,
-        prompt: prompt,
-        structured: true,
-        contextData: contextData,
-        fileData: imageBytes == null
-            ? null
-            : {
-                'mime_type': mimeType,
-                'data': base64Encode(imageBytes),
-              },
-      );
-
-      if (responseText.isEmpty) return null;
-
-      final cleanedJson = responseText
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
-
-      return jsonDecode(cleanedJson) as Map<String, dynamic>;
-    } catch (e) {
-      debugPrint('Proxy structured JSON error: $e');
-      return null;
-    }
   }
 
   Future<void> _initTts() async {
@@ -167,30 +112,17 @@ class VoiceHealthService {
     }
   }
 
-  // 📍 1. ฟังก์ชันสกัดข้อมูลสุขภาพจากการพูด (STT)
+  /// 📍 1. สกัดข้อมูลจากการพูดหรือข้อความ
   Future<Map<String, dynamic>?> processSpeechToHealthData(String speechText) async {
     try {
       final profileContext = await _profileService.getProfilePromptContext();
       final prompt = 'ข้อความ: "$speechText"\nบริบท: $profileContext\nสกัดค่าสุขภาพเป็น JSON';
 
-      if (kIsWeb) {
-        return await _proxyStructuredJson(
-          serviceType: 'consult',
-          prompt: prompt,
-          contextData: {'speech_text': speechText},
-        );
-      }
-
-      if (_model == null) return null;
-
-      final response = await _model!.generateContent([Content.text(prompt)]);
+      final response = await _model.generateContent([Content.text(prompt)]);
       final text = response.text;
 
       if (text != null && text.isNotEmpty) {
-        String cleanedJson = text
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
+        String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
         return jsonDecode(cleanedJson) as Map<String, dynamic>;
       }
       return null;
@@ -200,40 +132,24 @@ class VoiceHealthService {
     }
   }
 
-  // 📍 2. ฟังก์ชันอ่านหน้าจอเครื่องวัดความดัน (LCD Image OCR)
-  // 🚀 รับ Uint8List ตรงๆ แทน dart:io File เพื่อให้ทำงานได้ทั้งบนเว็บและมือถือ
-  // (เดิมใช้ File(path) ซึ่งพังบน Flutter Web ด้วย "Unsupported operation: _Namespace")
+  /// 📍 2. อ่านหน้าจอเครื่องวัดความดัน (LCD OCR) — ทำงานตรงเหมือน .apk 100%
   Future<Map<String, dynamic>?> processLcdImageInput(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
   }) async {
     try {
-      if (kIsWeb) {
-        return await _proxyStructuredJson(
-          serviceType: 'consult',
-          prompt: 'สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON',
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-        );
-      }
-
-      if (_model == null) return null;
-
       final content = [
         Content.multi([
-          TextPart('สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON'),
+          TextPart('สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON ตาม schema ที่กำหนด'),
           DataPart(mimeType, imageBytes),
         ])
       ];
 
-      final response = await _model!.generateContent(content);
+      final response = await _model.generateContent(content);
       final text = response.text;
 
       if (text != null && text.isNotEmpty) {
-        String cleanedJson = text
-            .replaceAll('```json', '')
-            .replaceAll('```', '')
-            .trim();
+        String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
         return jsonDecode(cleanedJson) as Map<String, dynamic>;
       }
       return null;
@@ -243,29 +159,12 @@ class VoiceHealthService {
     }
   }
 
-  // 📍 ฟังก์ชันสกัดข้อมูลใบแล็บ (ใช้ Supabase Edge Function proxy เพื่อให้ PWA/Web ทำงานได้)
+  /// 📍 3. ฟังก์ชันสกัดข้อมูลใบแล็บ (รองรับ Web & Mobile Direct)
   Future<Map<String, dynamic>?> processLabReportImage(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
   }) async {
     try {
-      if (kIsWeb) {
-        return await _proxyStructuredJson(
-          serviceType: 'lab',
-          prompt:
-              'สกัดค่า Total Cholesterol, HDL, LDL, Fasting Blood Sugar, Creatinine จากใบแล็บนี้เป็น JSON รูปแบบนี้:\n'
-              '{\n'
-              '  "total_cholesterol": number หรือ null,\n'
-              '  "hdl": number หรือ null,\n'
-              '  "ldl": number หรือ null,\n'
-              '  "fasting_blood_sugar": number หรือ null,\n'
-              '  "creatinine": number หรือ null\n'
-              '}',
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-        );
-      }
-
       final visionModel = GenerativeModel(
         model: 'gemini-3.7-flash',
         apiKey: apiKey,
@@ -311,71 +210,50 @@ class VoiceHealthService {
     }
   }
 
-  // 🚀 รับ Uint8List ตรงๆ แทน dart:io File เพื่อให้ทำงานได้ทั้งบนเว็บและมือถือ
+  /// 📍 4. ฟังก์ชันสกัดข้อมูลฉลากยา (รองรับ Web & Mobile Direct)
   Future<Map<String, dynamic>?> processDrugLabelImage(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
   }) async {
-    try {
-      if (kIsWeb) {
-        return await _proxyStructuredJson(
-          serviceType: 'consult',
-          prompt:
-              'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
-              '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
-              'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00',
-          imageBytes: imageBytes,
-          mimeType: mimeType,
-        );
-      }
+    final visionModel = GenerativeModel(
+      model: 'gemini-3.7-flash',
+      apiKey: apiKey,
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      ),
+    );
 
-      final visionModel = GenerativeModel(
-        model: 'gemini-3.7-flash',
-        apiKey: apiKey,
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        ),
-      );
+    final content = [
+      Content.multi([
+        TextPart(
+            'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
+            '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
+            'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00'),
+        DataPart(mimeType, imageBytes),
+      ])
+    ];
 
-      final content = [
-        Content.multi([
-          TextPart(
-              'สกัดข้อมูลฉลากยาเป็น JSON รูปแบบนี้:\n'
-              '{"medication_name":"ชื่อยา","dosage_instruction":"วิธีใช้","is_morning_active":true/false,"time_morning":"08:00","is_noon_active":true/false,"time_noon":"12:00","is_evening_active":true/false,"time_evening":"18:00"}\n'
-              'หากมื้อไหนไม่ระบุให้เป็น false และ 08:00'),
-          DataPart(mimeType, imageBytes),
-        ])
-      ];
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      try {
+        final response = await visionModel.generateContent(content);
+        final text = response.text;
 
-      for (int attempt = 1; attempt <= 2; attempt++) {
-        try {
-          final response = await visionModel.generateContent(content);
-          final text = response.text;
-
-          if (text != null && text.isNotEmpty) {
-            String cleanedJson = text
-                .replaceAll('```json', '')
-                .replaceAll('```', '')
-                .trim();
-            return jsonDecode(cleanedJson) as Map<String, dynamic>;
-          }
-          return null;
-        } catch (e) {
-          final errStr = e.toString();
-          if ((errStr.contains('503') || errStr.contains('UNAVAILABLE') || errStr.contains('429')) && attempt < 2) {
-            debugPrint('⚠️ Gemini 503 High Demand -> Retry attempt $attempt...');
-            await Future.delayed(const Duration(seconds: 1));
-            continue;
-          }
-          debugPrint('❌ Error processDrugLabelImage: $e');
-          return null;
+        if (text != null && text.isNotEmpty) {
+          String cleanedJson = text.replaceAll('```json', '').replaceAll('```', '').trim();
+          return jsonDecode(cleanedJson) as Map<String, dynamic>;
         }
+        return null;
+      } catch (e) {
+        final errStr = e.toString();
+        if ((errStr.contains('503') || errStr.contains('UNAVAILABLE') || errStr.contains('429')) && attempt < 2) {
+          await Future.delayed(const Duration(seconds: 1));
+          continue;
+        }
+        debugPrint('❌ Error processDrugLabelImage: $e');
+        return null;
       }
-      return null;
-    } catch (e) {
-      debugPrint('❌ Error preparing drug label image: $e');
-      return null;
     }
+    return null;
   }
 }
