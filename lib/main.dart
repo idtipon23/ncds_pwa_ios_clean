@@ -10,71 +10,39 @@ import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'services/patient_profile_service.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. โหลด Environment Variables
+  // 1. โหลด .env พร้อม Timeout ป้องกันค้าง
   try {
-    await dotenv.load(fileName: ".env");
+    await dotenv.load(fileName: ".env").timeout(const Duration(seconds: 3));
   } catch (e) {
     debugPrint('⚠️ Dotenv load warning: $e');
   }
 
-  // 2. เปิดใช้งานระบบแจ้งเตือน
+  // 2. เริ่มระบบแจ้งเตือน
   try {
     await NotificationService().init();
   } catch (e) {
-    debugPrint('Notification init error: $e');
+    debugPrint('⚠️ Notification init warning: $e');
   }
 
-  // 3. ตั้งค่า Supabase
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-  );
-
-  // 4. Anonymous Auth Lock-in
+  // 3. เริ่มต้น Supabase พร้อม Timeout
   try {
-    await AuthService().signInAnonymouslyIfNeeded();
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    debugPrint('✅ Anonymous Auth session ready: $currentUserId');
+    await Supabase.initialize(
+      url: dotenv.env['SUPABASE_URL'] ?? '',
+      anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    ).timeout(const Duration(seconds: 5));
   } catch (e) {
-    debugPrint('❌ Anonymous Auth Error: $e');
+    debugPrint('⚠️ Supabase initialize error: $e');
   }
 
-  // 5. ตรวจสอบ Session และ HN ผู้ป่วย
-  final profileService = PatientProfileService();
-  bool hasValidSession = false;
-
-  try {
-    final patientId = await profileService.getCurrentPatientId();
-    if (patientId != null && patientId.isNotEmpty) {
-      final isValid = await profileService.verifySessionInDatabase(patientId);
-      if (isValid) {
-        hasValidSession = true;
-      } else {
-        await profileService.clearLocalIdentity();
-      }
-    } else {
-      await profileService.clearLocalIdentity();
-    }
-  } catch (e) {
-    debugPrint('Error verifying session: $e');
-    await profileService.clearLocalIdentity();
-  }
-
-  runApp(MyApp(
-    isRegistered: hasValidSession,
-  ));
+  // 4. แสดงผลแอปทันที ไม่รอ Network Auth ใน main()
+  runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  final bool isRegistered;
-
-  const MyApp({
-    super.key,
-    required this.isRegistered,
-  });
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -102,7 +70,6 @@ class _MyAppState extends State<MyApp> {
 
       if (event == AuthChangeEvent.signedOut) {
         debugPrint('🔒 ผู้ใช้ทำการออกจากระบบ -> นำทางไปหน้า Login');
-
         NotificationService.navigatorKey.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginPage()),
           (route) => false,
@@ -119,9 +86,6 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    final Widget initialScreen =
-        widget.isRegistered ? const HomeScreen() : const LoginPage();
-
     return MaterialApp(
       navigatorKey: NotificationService.navigatorKey,
       title: 'NCDs Care & Health',
@@ -164,7 +128,6 @@ class _MyAppState extends State<MyApp> {
             ),
           ),
         ),
-        // ✅ แก้ไขเป็น CardThemeData เพื่อรองรับ Flutter M3 ได้ถูกต้อง
         cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 0,
@@ -174,7 +137,95 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
       ),
-      home: initialScreen,
+      home: const AppStartupGate(),
+    );
+  }
+}
+
+/// 🚀 Widget สำหรับตรวจสอบตัวตนเบื้องหลัง พร้อมแสดงหน้าจอดาวน์โหลดชั่วคราว
+class AppStartupGate extends StatefulWidget {
+  const AppStartupGate({super.key});
+
+  @override
+  State<AppStartupGate> createState() => _AppStartupGateState();
+}
+
+class _AppStartupGateState extends State<AppStartupGate> {
+  @override
+  void initState() {
+    super.initState();
+    _bootstrapApp();
+  }
+
+  Future<void> _bootstrapApp() async {
+    final profileService = PatientProfileService();
+    bool hasValidSession = false;
+
+    try {
+      // 1. ตรวจสอบ/กู้คืน Anonymous Session แบบมี Timeout (ไม่เกิน 5 วินาที)
+      await AuthService()
+          .signInAnonymouslyIfNeeded()
+          .timeout(const Duration(seconds: 5));
+
+      // 2. ตรวจสอบ HN ใน Local Storage และ Database
+      final patientId = await profileService
+          .getCurrentPatientId()
+          .timeout(const Duration(seconds: 3));
+
+      if (patientId != null && patientId.isNotEmpty) {
+        final isValid = await profileService
+            .verifySessionInDatabase(patientId)
+            .timeout(const Duration(seconds: 5));
+
+        if (isValid) {
+          hasValidSession = true;
+        } else {
+          await profileService.clearLocalIdentity();
+        }
+      } else {
+        await profileService.clearLocalIdentity();
+      }
+    } catch (e) {
+      debugPrint('⚠️ App Bootstrap Exception: $e');
+      await profileService.clearLocalIdentity();
+    }
+
+    if (!mounted) return;
+
+    // 3. เปลี่ยนหน้าจอทันทีเมื่อตรวจสอบเสร็จสิ้น
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            hasValidSession ? const HomeScreen() : const LoginPage(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFFFFF8F0),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFF2F9E82),
+              strokeWidth: 3,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'กำลังเข้าสู่ระบบสุขภาพ...',
+              style: TextStyle(
+                color: Color(0xFF8A7568),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
