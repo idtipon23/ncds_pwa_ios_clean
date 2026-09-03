@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -201,12 +201,13 @@ class VoiceHealthService {
   }
 
   // 📍 2. ฟังก์ชันอ่านหน้าจอเครื่องวัดความดัน (LCD Image OCR)
-  Future<Map<String, dynamic>?> processLcdImageInput(File imageFile) async {
+  // 🚀 รับ Uint8List ตรงๆ แทน dart:io File เพื่อให้ทำงานได้ทั้งบนเว็บและมือถือ
+  // (เดิมใช้ File(path) ซึ่งพังบน Flutter Web ด้วย "Unsupported operation: _Namespace")
+  Future<Map<String, dynamic>?> processLcdImageInput(
+    Uint8List imageBytes, {
+    String mimeType = 'image/jpeg',
+  }) async {
     try {
-      final imageBytes = await imageFile.readAsBytes();
-      final extension = imageFile.path.split('.').last.toLowerCase();
-      final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
-
       if (kIsWeb) {
         return await _proxyStructuredJson(
           serviceType: 'consult',
@@ -310,12 +311,12 @@ class VoiceHealthService {
     }
   }
 
-  Future<Map<String, dynamic>?> processDrugLabelImage(File imageFile) async {
+  // 🚀 รับ Uint8List ตรงๆ แทน dart:io File เพื่อให้ทำงานได้ทั้งบนเว็บและมือถือ
+  Future<Map<String, dynamic>?> processDrugLabelImage(
+    Uint8List imageBytes, {
+    String mimeType = 'image/jpeg',
+  }) async {
     try {
-      final imageBytes = await imageFile.readAsBytes();
-      final extension = imageFile.path.split('.').last.toLowerCase();
-      final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
-
       if (kIsWeb) {
         return await _proxyStructuredJson(
           serviceType: 'consult',

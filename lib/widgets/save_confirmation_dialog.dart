@@ -1,15 +1,15 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class SaveConfirmationDialog extends StatefulWidget {
   final Map<String, dynamic> healthData;
-  final File? imageFile;
+  final Uint8List? imageBytes;
   final Function(Map<String, dynamic> updatedData) onConfirm;
 
   const SaveConfirmationDialog({
     super.key,
     required this.healthData,
-    this.imageFile,
+    this.imageBytes,
     required this.onConfirm,
   });
 

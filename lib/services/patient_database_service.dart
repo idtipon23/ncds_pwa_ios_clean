@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PatientDatabaseService {
@@ -142,44 +142,49 @@ class PatientDatabaseService {
     }
   }
 
-  /// ย่อขนาดรูปภาพก่อนอัปโหลด
-  Future<File> _compressImage(File file) async {
+  /// ย่อขนาดรูปภาพก่อนอัปโหลด (ใช้ compressWithList เพราะทำงานได้ทั้งเว็บและมือถือ
+  /// ต่างจาก compressAndGetFile ที่ต้องพึ่ง path_provider/ระบบไฟล์ ซึ่งไม่มีบนเว็บ)
+  Future<Uint8List> _compressImageBytes(Uint8List bytes) async {
     try {
-      final tempDir = await path_provider.getTemporaryDirectory();
-      final targetPath =
-          '${tempDir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final XFile? result = await FlutterImageCompress.compressAndGetFile(
-        file.absolute.path,
-        targetPath,
+      final result = await FlutterImageCompress.compressWithList(
+        bytes,
         quality: 80,
         minWidth: 1024,
         minHeight: 1024,
       );
-
-      return result != null ? File(result.path) : file;
+      return result;
     } catch (e) {
-      debugPrint('⚠️ ย่อขนาดรูปภาพล้มเหลว ใช้ไฟล์เดิม: $e');
-      return file;
+      debugPrint('⚠️ ย่อขนาดรูปภาพล้มเหลว ใช้รูปเดิม: $e');
+      return bytes;
     }
   }
 
   /// 📍 [Fix Storage]: อัปโหลดรูปแล้ว คืนค่าเฉพาะ "File Path" (ไม่ใช่ Signed URL ยั่งยืนกว่า)
-  Future<String?> uploadHealthImage(File imageFile, String patientId) async {
+  Future<String?> uploadHealthImage(
+    Uint8List imageBytes,
+    String patientId, {
+    String mimeType = 'image/jpeg',
+  }) async {
     try {
       if (patientId.isEmpty) {
         debugPrint('❌ ไม่พบ Patient ID สำหรับอัปโหลดรูปภาพ');
         return null;
       }
 
-      final fileToUpload = await _compressImage(imageFile);
+      final bytesToUpload = await _compressImageBytes(imageBytes);
       final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final String path = '$patientId/$fileName';
 
-      await _supabase.storage.from('health_images').upload(
+      // 🚀 uploadBinary ใช้ Uint8List ตรงๆ ทำงานได้ทั้งเว็บและมือถือ
+      // (ต่างจาก upload() เดิมที่ต้องการ dart:io File ซึ่งพังบนเว็บ)
+      await _supabase.storage.from('health_images').uploadBinary(
             path,
-            fileToUpload,
-            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+            bytesToUpload,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: false,
+              contentType: 'image/jpeg',
+            ),
           );
 
       // 📍 คืนเฉพาะ Path เพื่อบันทึกลง DB ป้องกันปัญหาลิงก์หมดอายุในอนาคต

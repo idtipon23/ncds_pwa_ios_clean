@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -32,7 +32,8 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
   static const Color emeraldColor = Color(0xFF10B981);
   static const Color slateColor = Color(0xFF334155);
 
-  File? _imageFile;
+  Uint8List? _imageBytes;
+  String _imageMimeType = 'image/jpeg';
 
   @override
   void initState() {
@@ -458,14 +459,21 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
     _showSaveConfirmation(healthData);
   }
 
-  Future<void> _processImage(File imageFile) async {
+  Future<void> _processImage(Uint8List imageBytes, String fileName) async {
+    final extension = fileName.split('.').last.toLowerCase();
+    final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
+
     setState(() {
-      _imageFile = imageFile;
+      _imageBytes = imageBytes;
+      _imageMimeType = mimeType;
       _isProcessing = true;
     });
 
     try {
-      final healthData = await _voiceService.processLcdImageInput(imageFile);
+      final healthData = await _voiceService.processLcdImageInput(
+        imageBytes,
+        mimeType: mimeType,
+      );
       if (healthData != null && healthData['is_valid_health_data'] == true) {
         if (mounted) await _validateAndRouteData(healthData);
       } else {
@@ -493,7 +501,7 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
       context: context,
       builder: (ctx) => SaveConfirmationDialog(
         healthData: data,
-        imageFile: _imageFile,
+        imageBytes: _imageBytes,
         onConfirm: (updatedData) => _saveDataToDb(updatedData),
       ),
     );
@@ -508,8 +516,12 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
       }
 
       String? uploadedUrl;
-      if (_imageFile != null) {
-        uploadedUrl = await _dbService.uploadHealthImage(_imageFile!, patientId);
+      if (_imageBytes != null) {
+        uploadedUrl = await _dbService.uploadHealthImage(
+          _imageBytes!,
+          patientId,
+          mimeType: _imageMimeType,
+        );
       }
 
       await _dbService.saveVitalSigns(
@@ -557,7 +569,7 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
           ),
         );
         setState(() {
-          _imageFile = null;
+          _imageBytes = null;
         });
       }
     } catch (e) {
@@ -779,8 +791,8 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
             ),
             const SizedBox(height: 12),
             ImageInputField(
-              onImageSelected: (file) {
-                _processImage(file);
+              onImageSelected: (bytes, fileName) {
+                _processImage(bytes, fileName);
               },
             ),
           ],

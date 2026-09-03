@@ -20,7 +20,7 @@ class _LoginPageState extends State<LoginPage> {
   static const Color primaryTextColor = Color(0xFF4A3833);
   static const Color secondaryTextColor = Color(0xFF8A7568);
   static const Color emeraldTheme = Color(0xFF2F9E82);
-  static const Color softCardBg = Color(0xFFFBF6EE);
+  
 
   bool _isLoading = false;
 

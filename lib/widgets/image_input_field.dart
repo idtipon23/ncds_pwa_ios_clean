@@ -1,9 +1,9 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ImageInputField extends StatefulWidget {
-  final Function(File pickedImage) onImageSelected;
+  final Function(Uint8List bytes, String fileName) onImageSelected;
   final String labelText;
 
   const ImageInputField({
@@ -17,7 +17,9 @@ class ImageInputField extends StatefulWidget {
 }
 
 class _ImageInputFieldState extends State<ImageInputField> {
-  File? _selectedImage;
+  // 🚀 ใช้ Uint8List แทน dart:io File เพราะ File(...) พังบน Flutter Web
+  // (โยน "Unsupported operation: _Namespace" ทันทีที่เรียก constructor)
+  Uint8List? _selectedImageBytes;
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _pickImage(ImageSource source) async {
@@ -30,12 +32,14 @@ class _ImageInputFieldState extends State<ImageInputField> {
       );
 
       if (pickedFile != null) {
+        final bytes = await pickedFile.readAsBytes();
         setState(() {
-          _selectedImage = File(pickedFile.path);
+          _selectedImageBytes = bytes;
         });
-        widget.onImageSelected(_selectedImage!);
+        widget.onImageSelected(bytes, pickedFile.name);
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('เกิดข้อผิดพลาดในการเลือกรูปภาพ: $e')),
       );
@@ -124,13 +128,13 @@ class _ImageInputFieldState extends State<ImageInputField> {
                 width: 1.5,
               ),
             ),
-            child: _selectedImage != null
+            child: _selectedImageBytes != null
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(14),
                     child: Stack(
                       children: [
-                        Image.file(
-                          _selectedImage!,
+                        Image.memory(
+                          _selectedImageBytes!,
                           width: double.infinity,
                           height: double.infinity,
                           fit: BoxFit.contain,

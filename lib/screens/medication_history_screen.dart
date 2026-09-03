@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -133,9 +132,13 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
           throw Exception('ไม่พบรหัสผู้ป่วย กรุณาลงทะเบียนใหม่');
         }
 
-        final File imageFile = File(photo.path);
-        final extractedData =
-            await voiceService.processDrugLabelImage(imageFile);
+        final imageBytes = await photo.readAsBytes();
+        final extension = photo.name.split('.').last.toLowerCase();
+        final mimeType = (extension == 'png') ? 'image/png' : 'image/jpeg';
+        final extractedData = await voiceService.processDrugLabelImage(
+          imageBytes,
+          mimeType: mimeType,
+        );
         setState(() => _isProcessingImage = false);
 
         if (extractedData != null && extractedData.isNotEmpty) {
