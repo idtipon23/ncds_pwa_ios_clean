@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _profileData;
   List<Map<String, dynamic>> _todayFoodLogs = [];
   Map<String, dynamic>? _upcomingAppointment; // 📅 ข้อมูลวันนัดหมายถัดไป
+  Map<String, dynamic>? _nextAppointment;
 
   @override
   void initState() {
@@ -120,6 +121,27 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         } catch (e) {
           debugPrint('⚠️ Error/timeout loading appointment: $e');
+        }
+        // 4. ดึงวันนัดหมายถัดไป (นัดที่ยังไม่ถึง และสถานะ scheduled)
+        try {
+          final todayStr = DateTime.now().toIso8601String().split('T').first;
+          final appts = await Supabase.instance.client
+              .from('appointments')
+              .select()
+              .eq('patient_id', patientId)
+              .eq('status', 'scheduled')
+              .gte('appointment_date', todayStr)
+              .order('appointment_date', ascending: true)
+              .limit(1);
+
+          if (appts.isNotEmpty) {
+            _nextAppointment = appts.first;
+          } else {
+            _nextAppointment = null;
+          }
+        } catch (e) {
+          debugPrint('Error loading appointment: $e');
+          _nextAppointment = null;
         }
       }
     } catch (e) {
@@ -347,6 +369,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildHealthTreeBanner(),
                           const SizedBox(height: 18),
 
+                          // 📅 แถบวันนัดหมาย (แสดงทั้งแบบมีนัด และสแตนด์บายรอ)
+                          _buildAppointmentBanner(),
+                          const SizedBox(height: 18),
+
                           // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
                           _buildHealthIndicatorCard(),
                           const SizedBox(height: 26),
@@ -463,6 +489,71 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 📅 Widget การ์ดวันนัดหมายถัดไป (Appointment Banner)
   Widget _buildAppointmentBanner() {
+    // 🟢 กรณีที่ 1: ยังไม่มีนัดหมายในระบบ (แสดงแถบสแตนด์บายรอ ไม่ซ่อน UI)
+    if (_upcomingAppointment == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFF0E5D8),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                color: softCardBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.event_available_rounded,
+                color: secondaryTextColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'นัดหมายแพทย์ครั้งถัดไป',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: secondaryTextColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'ยังไม่มีนัดหมายในระบบ',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: mutedTextColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 🔵 กรณีที่ 2: มีนัดหมายจริง (ทำงานตามโค้ดเดิมของคุณทั้งหมด)
     final rawDate = _upcomingAppointment!['appointment_date']?.toString() ?? '';
     final timeStr = _upcomingAppointment!['appointment_time']?.toString().substring(0, 5) ?? '09:00';
     final clinic = _upcomingAppointment!['clinic_name']?.toString() ?? 'คลินิก NCDs';
