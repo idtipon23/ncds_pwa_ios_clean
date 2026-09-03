@@ -35,6 +35,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   String? _patientId;
   String _underlyingDiseases = '';
+  double _bmr = 0.0; // ✅ จุดแก้ที่ 1: เพิ่มตัวแปรสำหรับเก็บค่า BMR จาก Profile
   double _tdee = 2000.0;
   double _weightKg = 60.0; 
   int _latestSystolic = 120;
@@ -62,6 +63,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
       if (patientId != null) {
         _patientId = patientId;
+        // ✅ จุดแก้ที่ 2: ดึงค่า bmr จาก Profile เข้า State
+        _bmr = (profile?['bmr'] as num?)?.toDouble() ?? 0.0;
         _tdee = (profile?['tdee'] as num?)?.toDouble() ?? 2000.0;
         _weightKg = (profile?['weight_kg'] as num?)?.toDouble() ?? 60.0;
         _underlyingDiseases = profile?['underlying_diseases'] ?? '';
@@ -272,14 +275,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
       },
     );
   }
-  // สร้าง Instance สำหรับ ImagePicker
+
   final ImagePicker _imagePicker = ImagePicker();
 
   Future<void> _pickAndAnalyzeFoodImage(ImageSource source) async {
     if (_patientId == null) return;
 
     try {
-      // บีบอัดขนาดภาพทันที (1024px, คุณภาพ 70%) ป้องกัน Payload ใหญ่เกินบน PWA
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: source,
         maxWidth: 1024,
@@ -650,7 +652,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
       (sum, item) => sum + ((item['calories_burned'] as num?)?.toDouble() ?? 0.0),
     );
 
-    final targetDeficit = (_tdee - 400).clamp(1200.0, 9999.0);
+    // ✅ จุดแก้ที่ 3: ดึงค่า BMR จาก Profile มาเป็นเป้าหมายพลังงาน (ถ้าไม่มี ให้ Fallback ไปที่ TDEE หรือ 1500)
+    final double targetEnergy = _bmr > 0 ? _bmr : (_tdee > 0 ? _tdee : 1500.0);
 
     return Scaffold(
       backgroundColor: creamBgColor,
@@ -673,7 +676,8 @@ class _NutritionScreenState extends State<NutritionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildCalorieBalanceCard(totalFoodCals, totalBurnedCals, targetDeficit),
+                  // ส่ง targetEnergy ที่ใช้ค่า BMR เข้าสู่ Card พลังงานสุทธิ
+                  _buildCalorieBalanceCard(totalFoodCals, totalBurnedCals, targetEnergy),
                   const SizedBox(height: 16),
 
                   _buildExerciseClinicalGuardCard(),
@@ -905,7 +909,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 📷 แถบปุ่มถ่ายภาพ / เลือกภาพสำหรับ PWA
           Row(
             children: [
               Expanded(
@@ -949,7 +952,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
           ),
           const SizedBox(height: 14),
 
-          // ช่องกรอกข้อความเดิม
           TextField(
             controller: _foodInputController,
             maxLines: 2,
