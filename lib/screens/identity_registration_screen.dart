@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/patient_profile_service.dart';
@@ -22,7 +23,7 @@ class _IdentityRegistrationScreenState
   final _formKey = GlobalKey<FormState>();
   final _profileService = PatientProfileService();
 
-  // 🎨 Palette สีหลักตาม Design System
+  // 🎨 Palette สีตาม Design System
   static const Color creamBgColor = Color(0xFFFFF8F0);
   static const Color primaryTextColor = Color(0xFF4A3833);
   static const Color secondaryTextColor = Color(0xFF8A7568);
@@ -32,18 +33,17 @@ class _IdentityRegistrationScreenState
 
   bool _isLoading = false;
   bool _isFetchingHospitals = true;
-  bool _isExistingPatient = true; // Default: ผู้ป่วยเก่า (มี HN)
+  bool _isExistingPatient = true; // Default: ผู้ป่วยเก่า
   List<Map<String, dynamic>> _hospitals = [];
   String? _selectedHospitalId;
 
-  // 🚀 ตัวแปรสำหรับ Smart HN Memory (Dropdown ประวัติ HN)
-  List<String> _savedHnList = [];
-  String? _selectedSavedHn;
+  // 🌟 ตัวแปรสำหรับการจดจำตัวตนคนไข้เดิม 100% (Instant Quick Login)
+  Map<String, dynamic>? _lastSavedProfile;
 
   @override
   void initState() {
     super.initState();
-    _fetchHospitalsAndAutoFill();
+    _fetchInitialData();
   }
 
   @override
@@ -54,8 +54,8 @@ class _IdentityRegistrationScreenState
     super.dispose();
   }
 
-  /// 📍 ดึงรายชื่อโรงพยาบาล พร้อม Auto-fill ข้อมูล Smart HN Memory
-  Future<void> _fetchHospitalsAndAutoFill() async {
+  /// 📍 ดึงรายชื่อโรงพยาบาล และโหลดประวัติผู้ใช้งานคนล่าสุดเพื่อทำ Instant Card
+  Future<void> _fetchInitialData() async {
     setState(() => _isFetchingHospitals = true);
     try {
       final response = await _supabase
@@ -65,21 +65,15 @@ class _IdentityRegistrationScreenState
 
       final hospitalList = List<Map<String, dynamic>>.from(response);
 
-      final prefs = await SharedPreferences.getInstance();
-      final hnHistory = prefs.getStringList('saved_hn_history') ?? [];
-
+      // โหลดโปรไฟล์เดิมที่เคยล็อกอินไว้ในเครื่อง
+      final cachedProfile = await _profileService.getProfile();
       final lastInfo = await _profileService.getLastLoginInfo();
-      final savedHn = lastInfo['hn'] ?? '';
-      final savedHospitalId = lastInfo['hospital_id'] ?? '';
-
-      final Set<String> hnSet = {};
-      if (savedHn.isNotEmpty) hnSet.add(savedHn);
-      hnSet.addAll(hnHistory);
-      final List<String> uniqueHnList = hnSet.toList();
+      final savedHn = cachedProfile?['hn'] ?? lastInfo['hn'] ?? '';
+      final savedHospitalId =
+          cachedProfile?['hospital_id'] ?? lastInfo['hospital_id'] ?? '';
 
       setState(() {
         _hospitals = hospitalList;
-        _savedHnList = uniqueHnList;
 
         if (hospitalList.isNotEmpty) {
           _selectedHospitalId = hospitalList.first['id'].toString();
@@ -90,18 +84,14 @@ class _IdentityRegistrationScreenState
           _selectedHospitalId = savedHospitalId;
         }
 
-        if (savedHn.isNotEmpty) {
-          _hnController.text = savedHn;
-          _selectedSavedHn = savedHn;
-          _isExistingPatient = true;
-        } else if (uniqueHnList.isNotEmpty) {
-          _hnController.text = uniqueHnList.first;
-          _selectedSavedHn = uniqueHnList.first;
-          _isExistingPatient = true;
+        if (cachedProfile != null && savedHn.isNotEmpty) {
+          _lastSavedProfile = cachedProfile;
+          // ล้างคำนำหน้า HN- ออก เพื่อให้แสดงแต่ตัวเลขในกล่องกรอก
+          _hnController.text = _cleanHnNumber(savedHn);
         }
       });
     } catch (e) {
-      debugPrint('⚠️ Error fetching hospitals or HN memory: $e');
+      debugPrint('⚠️ Error loading initial identity data: $e');
     } finally {
       if (mounted) {
         setState(() => _isFetchingHospitals = false);
@@ -109,24 +99,65 @@ class _IdentityRegistrationScreenState
     }
   }
 
-  /// 📍 บันทึก HN เข้ารายการประวัติใน SharedPreferences
-  Future<void> _saveHnToHistory(String hn) async {
+  /// 🧹 ฟังก์ชันตัดคำว่า HN / HN- ออก ให้เหลือแต่ตัวเลขสำหรับแสดงผล
+  String _cleanHnNumber(String raw) {
+    String cleaned = raw.trim();
+    if (cleaned.toUpperCase().startsWith('HN-')) {
+      return cleaned.substring(3).trim();
+    } else if (cleaned.toUpperCase().startsWith('HN')) {
+      return cleaned.substring(2).trim();
+    }
+    return cleaned;
+  }
+
+  /// 🛠️ ฟังก์ชันจัดรูปแบบ HN ส่งเข้า Database ให้ได้มาตรฐาน HN-XXXXX เสมอ
+  String _formatHnForDatabase(String raw) {
+    String cleaned = _cleanHnNumber(raw).toUpperCase();
+    return 'HN-$cleaned';
+  }
+
+  /// 🚀 ทางลัดสำหรับผู้สูงอายุ: ล็อกอินต่อด้วยบัญชีเดิมทันที (ไม่ต้องกรอกอะไร)
+  Future<void> _continueWithExistingAccount() async {
+    if (_lastSavedProfile == null) return;
+    setState(() => _isLoading = true);
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final hnHistory = prefs.getStringList('saved_hn_history') ?? [];
-      if (!hnHistory.contains(hn)) {
-        hnHistory.insert(0, hn);
-        if (hnHistory.length > 10) {
-          hnHistory.removeLast();
-        }
-        await prefs.setStringList('saved_hn_history', hnHistory);
+      final hn = _lastSavedProfile!['hn'];
+      final hospitalId = _lastSavedProfile!['hospital_id'] ?? _selectedHospitalId;
+
+      // เรียก RPC ผูกสิทธิ์ให้แน่ใจว่าเซสชันยังทำงานได้ปกติ
+      final dynamic response = await _supabase.rpc(
+        'claim_existing_hn',
+        params: {
+          'p_hn': hn,
+          'p_hospital_id': hospitalId,
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response != null) {
+        await _profileService.saveProfile(Map<String, dynamic>.from(response));
       }
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
     } catch (e) {
-      debugPrint('Error saving HN history: $e');
+      debugPrint('Auto-login error: $e');
+      // หากเกิดปัญหา ให้เข้าสู่หน้าหลักด้วย Profile ในเครื่องทันที
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// 📍 บันทึก/ยืนยันตัวตน (ระบบ Anonymous Auth)
+  /// 📍 บันทึก/ยืนยันตัวตน
   Future<void> _saveIdentity() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedHospitalId == null) {
@@ -143,19 +174,15 @@ class _IdentityRegistrationScreenState
 
     try {
       final currentUser = _supabase.auth.currentUser;
-
       if (currentUser == null) {
         throw Exception('ไม่พบเซสชันผู้ใช้งาน กรุณาลองใหม่อีกครั้ง');
       }
 
       if (_isExistingPatient) {
         // ==================== ผู้ป่วยเก่า ====================
-        String hnInput = _hnController.text.trim();
-        final hn = hnInput.toUpperCase().startsWith('HN-')
-            ? hnInput.toUpperCase()
-            : 'HN-${hnInput.toUpperCase()}';
+        final hn = _formatHnForDatabase(_hnController.text);
 
-        debugPrint('🔍 กำลังเรียก RPC ผูกบัญชีกับ HN: "$hn"');
+        debugPrint('🔍 กำลังยืนยันรหัส HN: "$hn"');
 
         final dynamic response = await _supabase.rpc(
           'claim_existing_hn',
@@ -164,17 +191,17 @@ class _IdentityRegistrationScreenState
             'p_hospital_id': _selectedHospitalId,
           },
         ).timeout(const Duration(seconds: 10), onTimeout: () {
-          throw Exception('การเชื่อมต่อกับเซิร์ฟเวอร์ใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
+          throw Exception('การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
         });
 
         if (response == null) {
           throw Exception('ไม่พบข้อมูลผู้ป่วยรหัส HN: $hn ในสถานพยาบาลที่เลือก');
         }
 
-        final Map<String, dynamic> updateResponse = Map<String, dynamic>.from(response);
+        final Map<String, dynamic> updateResponse =
+            Map<String, dynamic>.from(response);
 
         await _profileService.saveProfile(updateResponse);
-        await _saveHnToHistory(hn);
       } else {
         // ==================== ผู้ป่วยใหม่ ====================
         final firstName = _firstNameController.text.trim();
@@ -182,9 +209,7 @@ class _IdentityRegistrationScreenState
 
         String rawHn = _hnController.text.trim();
         final newHn = rawHn.isNotEmpty
-            ? (rawHn.toUpperCase().startsWith('HN-')
-                ? rawHn.toUpperCase()
-                : 'HN-${rawHn.toUpperCase()}')
+            ? _formatHnForDatabase(rawHn)
             : 'HN-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
         final newPatientData = {
@@ -204,7 +229,6 @@ class _IdentityRegistrationScreenState
             .timeout(const Duration(seconds: 10));
 
         await _profileService.saveProfile(inserted);
-        await _saveHnToHistory(newHn);
       }
 
       if (!mounted) return;
@@ -221,15 +245,17 @@ class _IdentityRegistrationScreenState
         );
       }
     } catch (e) {
-      debugPrint('❌ เกิดข้อผิดพลาด: $e');
+      debugPrint('❌ Error saving identity: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}'),
+          content: Text(
+            'เกิดข้อผิดพลาด: ${e.toString().replaceAll("Exception: ", "")}',
+            style: const TextStyle(fontSize: 14),
+          ),
           backgroundColor: const Color(0xFFDC2626),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 4),
         ),
       );
     } finally {
@@ -245,7 +271,7 @@ class _IdentityRegistrationScreenState
       backgroundColor: creamBgColor,
       appBar: AppBar(
         title: const Text(
-          'ยืนยันตัวตน / ลงทะเบียนผู้ป่วย',
+          'เข้าสู่ระบบผู้ป่วย NCDs',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: primaryTextColor,
@@ -264,7 +290,20 @@ class _IdentityRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🌟 Toggle สลับโหมด (ผู้ป่วยเก่า / ผู้ป่วยใหม่)
+                    // 🌟 1. การ์ดจดจำคนไข้เดิม 100% (Instant Login Card)
+                    if (_lastSavedProfile != null) ...[
+                      _buildRememberedPatientCard(),
+                      const SizedBox(height: 22),
+                      const Center(
+                        child: Text(
+                          '— หรือระบุข้อมูลใหม่ด้านล่าง —',
+                          style: TextStyle(fontSize: 13, color: mutedTextColor),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+
+                    // 🌟 2. สลับโหมด (ผู้ป่วยเก่า / ผู้ป่วยใหม่)
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
@@ -289,7 +328,7 @@ class _IdentityRegistrationScreenState
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'ผู้ป่วยเก่า (มี HN)',
+                                    'มีเลข HN แล้ว',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -317,7 +356,7 @@ class _IdentityRegistrationScreenState
                                 ),
                                 child: Center(
                                   child: Text(
-                                    'ผู้ป่วยใหม่ (ไม่มี HN)',
+                                    'ลงทะเบียนใหม่ (ไม่มี HN)',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 14,
@@ -333,15 +372,16 @@ class _IdentityRegistrationScreenState
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
-                    // 🏢 กล่องฟอร์มหลัก
+                    // 🏢 3. กล่องฟอร์มกรอกข้อมูล
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFFF0E5D8), width: 1.2),
+                        border: Border.all(
+                            color: const Color(0xFFF0E5D8), width: 1.2),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.03),
@@ -353,9 +393,9 @@ class _IdentityRegistrationScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. เลือกสถานพยาบาล
+                          // 3.1 เลือกโรงพยาบาล
                           const Text(
-                            'สถานพยาบาล / คลินิก',
+                            'สถานพยาบาล / รพ.สต.',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -365,7 +405,9 @@ class _IdentityRegistrationScreenState
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
                             value: _selectedHospitalId,
-                            style: const TextStyle(color: primaryTextColor, fontSize: 14),
+                            isExpanded: true,
+                            style: const TextStyle(
+                                color: primaryTextColor, fontSize: 14),
                             decoration: _inputDecoration(
                               'เลือกสถานพยาบาล',
                               Icons.local_hospital_rounded,
@@ -375,7 +417,9 @@ class _IdentityRegistrationScreenState
                                 value: hospital['id'].toString(),
                                 child: Text(
                                   hospital['name'] ?? 'ไม่ระบุชื่อ',
-                                  style: const TextStyle(fontSize: 14, color: primaryTextColor),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 14, color: primaryTextColor),
                                 ),
                               );
                             }).toList(),
@@ -386,95 +430,10 @@ class _IdentityRegistrationScreenState
                           ),
                           const SizedBox(height: 20),
 
-                          // 2. ฟอร์มกรอก HN หรือ ข้อมูลผู้ป่วยใหม่
+                          // 3.2 ช่องกรอกเลข HN หรือข้อมูลผู้ป่วยใหม่
                           if (_isExistingPatient) ...[
-                            if (_savedHnList.isNotEmpty) ...[
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFEAF3E4),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: const Color(0xFF4C7A3F).withValues(alpha: 0.25),
-                                  ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Row(
-                                      children: [
-                                        Icon(Icons.history_rounded, color: Color(0xFF3E5E33), size: 18),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'เลือกเลข HN ที่เคยบันทึกไว้',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF3E5E33),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    DropdownButtonFormField<String>(
-                                      value: _savedHnList.contains(_selectedSavedHn)
-                                          ? _selectedSavedHn
-                                          : null,
-                                      hint: const Text(
-                                        '-- แตะเลือกเลข HN เดิม --',
-                                        style: TextStyle(color: secondaryTextColor, fontSize: 13),
-                                      ),
-                                      decoration: InputDecoration(
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        isDense: true,
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: const BorderSide(color: Color(0xFFEADBCE)),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: const BorderSide(color: Color(0xFFEADBCE)),
-                                        ),
-                                      ),
-                                      items: _savedHnList.map((hn) {
-                                        return DropdownMenuItem<String>(
-                                          value: hn,
-                                          child: Text(
-                                            'HN: $hn',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: primaryTextColor,
-                                            ),
-                                          ),
-                                        );
-                                      }).toList(),
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _selectedSavedHn = val;
-                                            _hnController.text = val;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Center(
-                                child: Text(
-                                  '— หรือพิมพ์ระบุเลข HN ด้านล่าง —',
-                                  style: TextStyle(fontSize: 12, color: mutedTextColor),
-                                ),
-                              ),
-                              const SizedBox(height: 14),
-                            ],
-
                             const Text(
-                              'รหัส HN (เลขประจำตัวผู้ป่วย)',
+                              'เลขประจำตัวผู้ป่วย (HN)',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -482,22 +441,71 @@ class _IdentityRegistrationScreenState
                               ),
                             ),
                             const SizedBox(height: 8),
+
+                            // ช่องกรอกที่ล็อกคำว่า "HN-" ไว้ข้างหน้าอัตโนมัติ
                             TextFormField(
                               controller: _hnController,
-                              style: const TextStyle(color: primaryTextColor, fontSize: 15),
-                              decoration: _inputDecoration('เช่น 16914', Icons.badge_rounded),
-                              onChanged: (val) {
-                                if (_selectedSavedHn != val) {
-                                  setState(() => _selectedSavedHn = null);
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              style: const TextStyle(
+                                color: primaryTextColor,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                              decoration: InputDecoration(
+                                prefixIcon: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 14),
+                                  child: const Text(
+                                    'HN -',
+                                    style: TextStyle(
+                                      color: emeraldTheme,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                    ),
+                                  ),
+                                ),
+                                prefixIconConstraints: const BoxConstraints(
+                                    minWidth: 0, minHeight: 0),
+                                hintText: 'กรอกเฉพาะตัวเลข (เช่น 16914)',
+                                hintStyle: const TextStyle(
+                                  color: mutedTextColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.normal,
+                                ),
+                                filled: true,
+                                fillColor: const Color(0xFFFAFAFA),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 14),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFEADBCE)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFEADBCE)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: const BorderSide(
+                                      color: emeraldTheme, width: 2),
+                                ),
+                              ),
+                              validator: (val) {
+                                if (val == null || val.trim().isEmpty) {
+                                  return 'กรุณากรอกตัวเลข HN';
                                 }
+                                return null;
                               },
-                              validator: (val) => (val == null || val.trim().isEmpty)
-                                  ? 'กรุณากรอกรหัส HN'
-                                  : null,
                             ),
                           ] else ...[
                             const Text(
-                              'ชื่อผู้ป่วย',
+                              'ชื่อจริงผู้ป่วย',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -507,11 +515,14 @@ class _IdentityRegistrationScreenState
                             const SizedBox(height: 8),
                             TextFormField(
                               controller: _firstNameController,
-                              style: const TextStyle(color: primaryTextColor, fontSize: 15),
-                              decoration: _inputDecoration('กรอกชื่อจริง', Icons.person_rounded),
-                              validator: (val) => (val == null || val.trim().isEmpty)
-                                  ? 'กรุณากรอกชื่อ'
-                                  : null,
+                              style: const TextStyle(
+                                  color: primaryTextColor, fontSize: 15),
+                              decoration: _inputDecoration(
+                                  'กรอกชื่อจริง', Icons.person_rounded),
+                              validator: (val) =>
+                                  (val == null || val.trim().isEmpty)
+                                      ? 'กรุณากรอกชื่อจริง'
+                                      : null,
                             ),
                             const SizedBox(height: 16),
 
@@ -526,38 +537,22 @@ class _IdentityRegistrationScreenState
                             const SizedBox(height: 8),
                             TextFormField(
                               controller: _lastNameController,
-                              style: const TextStyle(color: primaryTextColor, fontSize: 15),
-                              decoration: _inputDecoration('กรอกนามสกุล', Icons.person_outline_rounded),
-                              validator: (val) => (val == null || val.trim().isEmpty)
-                                  ? 'กรุณากรอกนามสกุล'
-                                  : null,
-                            ),
-                            const SizedBox(height: 16),
-
-                            const Text(
-                              'รหัส HN (ระบุเอง หรือเว้นว่างไว้)',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: primaryTextColor,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: _hnController,
-                              style: const TextStyle(color: primaryTextColor, fontSize: 15),
+                              style: const TextStyle(
+                                  color: primaryTextColor, fontSize: 15),
                               decoration: _inputDecoration(
-                                'เว้นว่างไว้หากต้องการให้ระบบสร้างให้อัตโนมัติ',
-                                Icons.pin_rounded,
-                              ),
+                                  'กรอกนามสกุล', Icons.person_outline_rounded),
+                              validator: (val) =>
+                                  (val == null || val.trim().isEmpty)
+                                      ? 'กรุณากรอกนามสกุล'
+                                      : null,
                             ),
                           ],
                         ],
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-                    // 🔘 ปุ่มยืนยัน
+                    // 🔘 ปุ่มบันทึก/เข้าสู่ระบบ
                     SizedBox(
                       width: double.infinity,
                       height: 54,
@@ -588,6 +583,119 @@ class _IdentityRegistrationScreenState
                 ),
               ),
             ),
+    );
+  }
+
+  /// 🌟 การ์ดโปรไฟล์เดิมสำหรับผู้สูงอายุ (แตะปุ่มเดียวเข้าแอปได้ทันที)
+  Widget _buildRememberedPatientCard() {
+    final name = _lastSavedProfile!['first_name'] != null
+        ? '${_lastSavedProfile!['first_name']} ${_lastSavedProfile!['last_name'] ?? ''}'
+        : (_lastSavedProfile!['name'] ?? 'ผู้ใช้งานเดิม');
+    final hn = _lastSavedProfile!['hn'] ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF3E4),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF4C7A3F).withValues(alpha: 0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFD9EBCF),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_circle_rounded,
+                  color: Color(0xFF3E5E33),
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'พบข้อมูลผู้ป่วยเดิมในเครื่องนี้',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF5C7A50),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'คุณ $name',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTextColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  hn,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: emeraldTheme,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3E5E33),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                elevation: 0,
+              ),
+              onPressed: _isLoading ? null : _continueWithExistingAccount,
+              icon: const Icon(Icons.touch_app_rounded, color: Colors.white, size: 20),
+              label: const Text(
+                'แตะเพื่อเข้าใช้งานต่อทันที',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
