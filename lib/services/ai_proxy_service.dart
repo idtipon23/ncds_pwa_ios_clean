@@ -33,7 +33,7 @@ class AiProxyService {
               if (fileData != null) 'file_data': fileData,
             },
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 30));
 
       // ตรวจสอบ Status 200
       if (response.status != 200) {

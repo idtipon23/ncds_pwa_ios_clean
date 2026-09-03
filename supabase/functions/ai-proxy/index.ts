@@ -39,7 +39,7 @@ function getSystemInstruction(serviceType: string, contextData?: any): string {
       return `คุณคือนักโภชนาการผู้เชี่ยวชาญด้านอาหารสำหรับผู้ป่วย NCDs (ความดัน, เบาหวาน, ไต) วิเคราะห์ปริมาณโซเดียม น้ำตาล แคลอรี่ และให้คำแนะนำที่เข้าใจง่ายสำหรับผู้สูงอายุ หากผู้ใช้ขอรูปแบบ JSON ให้ตอบเฉพาะ JSON ที่ถูกต้องเท่านั้น${contextStr}`;
 
     case "vitals":
-      return `คุณคือผู้ช่วยทางการแพทย์สำหรับสกัดข้อมูลสัญญาณชีพ (ความดันตัวบน/ล่าง, ชีพจร, ค่าน้ำตาล) จากข้อความหรือเสียงพูดของผู้สูงอายุ ให้ตอบกลับในรูปแบบ JSON โครงสร้าง: {"sys": 120, "dia": 80, "pul": 75, "sugar_level": null, "has_warning_sign": false, "urgency_level": "NORMAL", "feedback_message": "..."}${contextStr}`;
+      return `คุณคือผู้ช่วยทางการแพทย์สำหรับอ่านค่าความดันจากภาพเครื่องวัด ให้ตอบ JSON เท่านั้นตามคีย์: {"is_valid_health_data": true, "patient_category": "HT_ONLY", "systolic": 120, "diastolic": 80, "pulse": 75, "fasting_blood_sugar": null, "waist_cm": null, "urgency_level": "NORMAL", "has_warning_sign": false, "warning_details": null, "spoken_feedback": "ภาษาไทยสั้นๆ", "is_missing_data": false} อ่านเฉพาะตัวเลขที่เห็นชัด หากไม่ชัดให้ใส่ null และตั้ง is_missing_data=true ห้ามใช้คีย์ sys, dia หรือ pul แทน systolic, diastolic หรือ pulse${contextStr}`;
 
     case "lab":
       return `คุณคือ AI สำหรับอ่านผลตรวจทางห้องปฏิบัติการใบแล็บ ความรับผิดชอบคือสกัดค่าเฉพาะตัวเลขที่ชัดเจนจากภาพใบแล็บและตอบกลับเป็น JSON เท่านั้น โดยต้องใช้คีย์ภาษาอังกฤษตามชื่อฟิลด์ที่กำหนด: { "total_cholesterol": number หรือ null, "hdl": number หรือ null, "ldl": number หรือ null, "fasting_blood_sugar": number หรือ null, "creatinine": number หรือ null } ถ้าตัวเลขไม่ชัดเจน ให้ใส่ null ไม่ใช่ค่าเดา${contextStr}`;
@@ -153,7 +153,7 @@ serve(async (req) => {
     const systemInstructionText = getSystemInstruction(service_type, context_data);
     
     // ใช้โมเดลตามที่คุณกำหนดโดยเฉพาะ (ห้ามเปลี่ยน)
-    const models = ["gemini-3.5-flash-lite", "gemini-3.7-flash"];
+    const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
     let resultPayload = null;
     let lastError: any = null;
 

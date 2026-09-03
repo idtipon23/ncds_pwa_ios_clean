@@ -88,8 +88,7 @@ class VoiceHealthService {
 
   VoiceHealthService(this.apiKey) {
     if (!kIsWeb) {
-      _model = GenerativeModel(
-        model: 'gemini-3.5-flash-lite',
+      _model = GenerativeModel(model: 'gemini-3.7-flash',
         apiKey: apiKey,
         systemInstruction: Content.system(_systemPrompt),
         generationConfig: GenerationConfig(
@@ -210,8 +209,15 @@ class VoiceHealthService {
     try {
       if (kIsWeb) {
         return await _proxyStructuredJson(
-          serviceType: 'consult',
-          prompt: 'สกัดค่า SYS, DIA, PUL จากภาพเครื่องวัดความดันนี้เป็น JSON',
+          serviceType: 'vitals',
+          prompt:
+              'อ่านค่าจากภาพเครื่องวัดความดันและตอบเป็น JSON เท่านั้นตามคีย์นี้: '
+              '{"is_valid_health_data":true,"patient_category":"HT_ONLY",'
+              '"systolic":number,"diastolic":number,"pulse":numberหรือnull,'
+              '"urgency_level":"NORMAL","has_warning_sign":false,'
+              '"warning_details":null,"spoken_feedback":"ภาษาไทยสั้นๆ",'
+              '"is_missing_data":false}. หากตัวเลขไม่ชัดให้เป็น null และตั้ง '
+              'is_missing_data เป็น true ห้ามเดาตัวเลข',
           imageBytes: imageBytes,
           mimeType: mimeType,
         );
@@ -267,7 +273,7 @@ class VoiceHealthService {
       }
 
       final visionModel = GenerativeModel(
-        model: 'gemini-3.5-flash-lite',
+        model: 'gemini-3.7-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',
@@ -330,7 +336,7 @@ class VoiceHealthService {
       }
 
       final visionModel = GenerativeModel(
-        model: 'gemini-3.5-flash-lite',
+        model: 'gemini-3.7-flash',
         apiKey: apiKey,
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',
