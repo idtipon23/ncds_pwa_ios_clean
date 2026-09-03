@@ -56,8 +56,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final patientId = await _profileService.getCurrentPatientId();
-      final profile = await _profileService.getProfile();
+      // 🚀 timeout ทุก query กัน UI ค้างถาวรถ้า request ไม่ error แต่ก็ไม่ตอบกลับ
+      // (พบได้บน iOS standalone WKWebView เมื่อเพิ่มไอคอนไว้หน้าจอหลัก)
+      final patientId = await _profileService
+          .getCurrentPatientId()
+          .timeout(const Duration(seconds: 8));
+      final profile = await _profileService
+          .getProfile()
+          .timeout(const Duration(seconds: 8));
       _profileData = profile;
 
       if (profile != null) {
@@ -66,25 +72,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (patientId != null && patientId.isNotEmpty) {
         // 1. ดึงข้อมูลความดัน 7 วันล่าสุด
-        final vitals = await _vitalRepo.getLast7Days(patientId);
-        if (vitals.isNotEmpty) {
-          _hasVitalData = true;
-          _streakDays = vitals.length;
-          double sumSys = 0;
-          double sumDia = 0;
-          for (var v in vitals) {
-            sumSys += (v['systolic'] as num?)?.toDouble() ?? 0;
-            sumDia += (v['diastolic'] as num?)?.toDouble() ?? 0;
+        try {
+          final vitals = await _vitalRepo
+              .getLast7Days(patientId)
+              .timeout(const Duration(seconds: 8));
+          if (vitals.isNotEmpty) {
+            _hasVitalData = true;
+            _streakDays = vitals.length;
+            double sumSys = 0;
+            double sumDia = 0;
+            for (var v in vitals) {
+              sumSys += (v['systolic'] as num?)?.toDouble() ?? 0;
+              sumDia += (v['diastolic'] as num?)?.toDouble() ?? 0;
+            }
+            _avgSys7Days = sumSys / vitals.length;
+            _avgDia7Days = sumDia / vitals.length;
           }
-          _avgSys7Days = sumSys / vitals.length;
-          _avgDia7Days = sumDia / vitals.length;
+        } catch (e) {
+          debugPrint('⚠️ Error/timeout loading vitals: $e');
         }
 
         // 2. ดึงบันทึกอาหารวันนี้
         try {
-          _todayFoodLogs = await _nutritionService.getTodayFoodLogs(patientId);
+          _todayFoodLogs = await _nutritionService
+              .getTodayFoodLogs(patientId)
+              .timeout(const Duration(seconds: 8));
         } catch (e) {
-          debugPrint('Error loading today food logs: $e');
+          debugPrint('⚠️ Error/timeout loading today food logs: $e');
         }
 
         // 3. 📅 ดึงวันนัดหมายถัดไปที่ยังไม่ถึงกำหนด (นับตั้งแต่วันนี้เป็นต้นไป)
@@ -98,17 +112,18 @@ class _HomeScreenState extends State<HomeScreen> {
               .gte('appointment_date', todayStr)
               .order('appointment_date', ascending: true)
               .limit(1)
-              .maybeSingle();
+              .maybeSingle()
+              .timeout(const Duration(seconds: 8));
 
           if (apptRes != null) {
             _upcomingAppointment = Map<String, dynamic>.from(apptRes);
           }
         } catch (e) {
-          debugPrint('Error loading appointment: $e');
+          debugPrint('⚠️ Error/timeout loading appointment: $e');
         }
       }
     } catch (e) {
-      debugPrint('Error loading dashboard: $e');
+      debugPrint('⚠️ Error/timeout loading dashboard: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

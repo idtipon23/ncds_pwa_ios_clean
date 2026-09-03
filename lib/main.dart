@@ -27,18 +27,50 @@ Future<void> main() async {
     debugPrint('⚠️ Notification init warning: $e');
   }
 
-  // 3. เริ่มต้น Supabase พร้อม Timeout
+  // 3. เริ่มต้น Supabase ให้เสร็จก่อนสร้าง widget ที่เรียกใช้ client
+  var supabaseReady = false;
   try {
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL'] ?? '',
       anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
-    ).timeout(const Duration(seconds: 5));
+    ).timeout(const Duration(seconds: 15));
+    supabaseReady = true;
   } catch (e) {
     debugPrint('⚠️ Supabase initialize error: $e');
   }
 
-  // 4. แสดงผลแอปทันที ไม่รอ Network Auth ใน main()
-  runApp(const MyApp());
+  runApp(supabaseReady ? const MyApp() : const SupabaseUnavailableApp());
+}
+
+class SupabaseUnavailableApp extends StatelessWidget {
+  const SupabaseUnavailableApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true),
+      home: Scaffold(
+        backgroundColor: const Color(0xFFFFF8F0),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'ไม่สามารถเชื่อมต่อระบบได้',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                const Text('กรุณาตรวจสอบอินเทอร์เน็ตแล้วเปิดแอปใหม่อีกครั้ง'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class MyApp extends StatefulWidget {
