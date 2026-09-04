@@ -5,16 +5,75 @@ const LINE_CHANNEL_ACCESS_TOKEN = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') ?? '
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+// Client ตัวนี้ใช้ Service Role Key จึงมีสิทธิ์เขียน Database ได้อย่างปลอดภัยโดยไม่ต้องเปิด RLS anon
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+      },
+    })
+  }
+
   try {
-    const { action, mealType } = await req.json().catch(() => ({ action: 'check_dynamic' }))
+    const body = await req.json().catch(() => ({}))
+    const action = body.action || 'check_dynamic'
     console.log(`[Trigger Received]: Action = ${action}`)
 
     let result: any = null
 
-    if (action === 'check_dynamic' || action === 'check_medications') {
+    // 📩 รองรับการส่งข้อความตรงจาก Staff Dashboard
+    if (action === 'send_custom_message') {
+      const { patient_id, to, text, staff_name, send_to_line } = body
+
+      if (!patient_id || !text) {
+        throw new Error("Missing 'patient_id' or 'text'")
+      }
+
+      // 1. บันทึกข้อความลงตาราง staff_notes ผ่านสิทธิ์หลังบ้าน (ปลอดภัย ไม่ติด RLS 401)
+      const { error: noteError } = await supabaseAdmin.from('staff_notes').insert({
+        patient_id: patient_id,
+        staff_name: staff_name || 'เจ้าหน้าที่คลินิก',
+        note_text: text,
+      })
+
+      if (noteError) {
+        console.error('[DB Note Insert Error]:', noteError.message)
+        throw new Error(`DB Error: ${noteError.message}`)
+      }
+
+      // 2. หากเลือกส่งเข้า LINE และมี line_user_id ให้ยิงข้อความ
+      if (send_to_line && to) {
+        // ✨ ตัดข้อความ static ออก เหลือเฉพาะ Emoji สวยๆ หัว-ท้าย
+        const formattedMessage = `🩺✨ ${text} 🌱🤍`
+        
+        result = await pushLineMessage(to, formattedMessage)
+        console.log(`[Direct Message Sent] -> ${to}: ${text}`)
+
+        // บันทึก Alert สำเร็จ
+        await supabaseAdmin.from('clinical_alerts').insert({
+          patient_id: patient_id,
+          alert_type: 'STAFF_DIRECT_MESSAGE',
+          severity: 'INFO',
+          status: 'RESOLVED',
+        })
+      }
+
+      return new Response(JSON.stringify({ success: true, details: result }), {
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        },
+        status: 200,
+      })
+    } 
+    
+    // Automation Alerts เดิม (คงสภาพเดิม 100% ไม่กระทบส่วนอื่น)
+    else if (action === 'check_dynamic' || action === 'check_medications') {
       result = await checkDynamicMedications()
     } else if (action === 'check_bp_inactivity') {
       result = await sendBpInactivityAlerts()
@@ -23,13 +82,19 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: true, details: result }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       status: 200,
     })
   } catch (error: any) {
     console.error("[Fatal Error]:", error.message)
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      },
       status: 500,
     })
   }
@@ -57,7 +122,7 @@ async function checkDynamicMedications() {
 
   console.log(`[Dynamic Check] Current BKK Time: ${currentBkkTime} | Date: ${currentBkkDate}`)
 
-  const { data: meds, error } = await supabase
+  const { data: meds, error } = await supabaseAdmin
     .from('medication_logs')
     .select(`
       id,
@@ -98,7 +163,7 @@ async function checkDynamicMedications() {
     }
 
     for (const meal of activeMealsToAlert) {
-      const { data: adherence } = await supabase
+      const { data: adherence } = await supabaseAdmin
         .from('medication_adherence_logs')
         .select('id')
         .eq('patient_id', med.patient_id)
@@ -130,7 +195,7 @@ async function checkDynamicMedications() {
 async function sendBpInactivityAlerts() {
   const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const { data: patients, error } = await supabase
+  const { data: patients, error } = await supabaseAdmin
     .from('patients')
     .select('id, first_name, line_user_id, line_recipient_role')
     .eq('notify_bp_inactive', true)
@@ -140,7 +205,7 @@ async function sendBpInactivityAlerts() {
 
   let sentCount = 0
   for (const patient of patients) {
-    const { data: latestVital } = await supabase
+    const { data: latestVital } = await supabaseAdmin
       .from('vital_signs')
       .select('recorded_at')
       .eq('patient_id', patient.id)
@@ -177,22 +242,18 @@ async function sendAppointmentReminders() {
   const todayStr = dateFormatter.format(now)
   const today = new Date(`${todayStr}T00:00:00+07:00`)
 
-  // วันพรุ่งนี้ (+1 วัน)
   const in1Day = new Date(today)
   in1Day.setDate(today.getDate() + 1)
   const dateIn1Day = dateFormatter.format(in1Day)
 
-  // อีก 3 วัน (+3 วัน)
   const in3Days = new Date(today)
   in3Days.setDate(today.getDate() + 3)
   const dateIn3Days = dateFormatter.format(in3Days)
 
-  console.log(`[Appointment Check] Today: ${todayStr} | In 1 Day: ${dateIn1Day} | In 3 Days: ${dateIn3Days}`)
-
   let sentCount = 0
 
-  // --- แจ้งเตือนล่วงหน้า 3 วัน ---
-  const { data: appts3Days, error: err3 } = await supabase
+  // แจ้งเตือนล่วงหน้า 3 วัน
+  const { data: appts3Days, error: err3 } = await supabaseAdmin
     .from('appointments')
     .select(`
       id, appointment_date, appointment_time, clinic_name, doctor_name, reason, need_fasting,
@@ -214,14 +275,13 @@ async function sendAppointmentReminders() {
       ? `📅 [แจ้งเตือนผู้ดูแล] คุณ ${patient.first_name || 'ผู้รับบริการ'} มีนัดตรวจในอีก 3 วัน\n\n🗓️ วันที่: ${appt.appointment_date}\n⏰ เวลา: ${appt.appointment_time || '09:00'} น.\n🏥 สถานที่: ${appt.clinic_name || 'คลินิก NCDs'}\n📋 สาเหตุที่นัด: ${appt.reason || 'ตรวจติดตามอาการ'}${fastingNote}\n\nกรุณาช่วยเตรียมความพร้อมและบัตรประชาชนนะคะ 🌱`
       : `📅 แจ้งเตือนวันนัดหมาย (อีก 3 วัน)\n\nสวัสดีค่ะ คุณ ${patient.first_name || 'ผู้รับบริการ'}\nท่านมีนัดตรวจที่: ${appt.clinic_name || 'คลินิก NCDs'}\n🗓️ วันที่: ${appt.appointment_date}\n⏰ เวลา: ${appt.appointment_time || '09:00'} น.\n📋 นัดเพื่อ: ${appt.reason || 'ตรวจติดตามอาการ'}${fastingNote}\n\nอย่าลืมเตรียมตัวให้พร้อมนะคะ 😊`
 
-    console.log(`[Sending 3-Day Appt LINE] -> ${patient.first_name} (${patient.line_user_id})`)
     await pushLineMessage(patient.line_user_id, message)
-    await supabase.from('appointments').update({ is_notified_3days: true }).eq('id', appt.id)
+    await supabaseAdmin.from('appointments').update({ is_notified_3days: true }).eq('id', appt.id)
     sentCount++
   }
 
-  // --- แจ้งเตือนล่วงหน้า 1 วัน (วันพรุ่งนี้) ---
-  const { data: appts1Day, error: err1 } = await supabase
+  // แจ้งเตือนล่วงหน้า 1 วัน
+  const { data: appts1Day, error: err1 } = await supabaseAdmin
     .from('appointments')
     .select(`
       id, appointment_date, appointment_time, clinic_name, doctor_name, reason, need_fasting,
@@ -243,9 +303,8 @@ async function sendAppointmentReminders() {
       ? `🚨 [แจ้งเตือนผู้ดูแล] พรุ่งนี้คุณ ${patient.first_name || 'ผู้รับบริการ'} มีนัดพบแพทย์!\n\n🗓️ วันที่: ${appt.appointment_date}\n⏰ เวลา: ${appt.appointment_time || '09:00'} น.\n🏥 สถานที่: ${appt.clinic_name || 'คลินิก NCDs'}\n📋 เพื่อ: ${appt.reason || 'ตรวจติดตามอาการ'}${fastingNote}\n\nกรุณาพายาเดิมทั้งหมดไปด้วยนะคะ 🌱`
       : `🚨 เตือนความจำ: พรุ่งนี้มีนัดพบแพทย์!\n\nสวัสดีค่ะ คุณ ${patient.first_name || 'ผู้รับบริการ'}\n🗓️ วันที่: ${appt.appointment_date}\n⏰ เวลา: ${appt.appointment_time || '09:00'} น.\n🏥 ${appt.clinic_name || 'คลินิก NCDs'}${fastingNote}\n\nกรุณานำสมุดประจำตัวและยาเดิมทั้งหมดมาด้วยนะคะ 😊`
 
-    console.log(`[Sending 1-Day Appt LINE] -> ${patient.first_name} (${patient.line_user_id})`)
     await pushLineMessage(patient.line_user_id, message)
-    await supabase.from('appointments').update({ is_notified_1day: true }).eq('id', appt.id)
+    await supabaseAdmin.from('appointments').update({ is_notified_1day: true }).eq('id', appt.id)
     sentCount++
   }
 

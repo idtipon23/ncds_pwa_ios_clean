@@ -189,37 +189,34 @@ class _AppStartupGateState extends State<AppStartupGate> {
     _bootstrapApp();
   }
 
-  Future<void> _bootstrapApp() async {
+ Future<void> _bootstrapApp() async {
     final profileService = PatientProfileService();
     bool hasValidSession = false;
 
     try {
-      // 1. ตรวจสอบ/กู้คืน Anonymous Session แบบมี Timeout (ไม่เกิน 5 วินาที)
+      // 1. กู้คืน Anonymous Session
       await AuthService()
           .signInAnonymouslyIfNeeded()
           .timeout(const Duration(seconds: 5));
 
-      // 2. ตรวจสอบ HN ใน Local Storage และ Database
+      // 2. ตรวจสอบ Patient ID ในเครื่อง
       final patientId = await profileService
           .getCurrentPatientId()
           .timeout(const Duration(seconds: 3));
 
+      // 🔒 ระบบ Lock-in ถาวร: ถ้าในเครื่องเคยมีข้อมูลคนไข้เดิม ให้เข้าใช้งานต่อทันที ห้ามล้างข้อมูลทิ้ง
       if (patientId != null && patientId.isNotEmpty) {
-        final isValid = await profileService
-            .verifySessionInDatabase(patientId)
-            .timeout(const Duration(seconds: 5));
-
-        if (isValid) {
-          hasValidSession = true;
-        } else {
-          await profileService.clearLocalIdentity();
-        }
-      } else {
-        await profileService.clearLocalIdentity();
+        hasValidSession = true;
       }
     } catch (e) {
-      debugPrint('⚠️ App Bootstrap Exception: $e');
-      await profileService.clearLocalIdentity();
+      debugPrint('⚠️ App Bootstrap Exception (Safe fallback): $e');
+      // แม้เน็ตจะสะดุดหรือหลุด Timeout ก็ยังเช็กว่ามี ID ค้างในเครื่องหรือไม่
+      try {
+        final patientId = await profileService.getCurrentPatientId();
+        if (patientId != null && patientId.isNotEmpty) {
+          hasValidSession = true;
+        }
+      } catch (_) {}
     }
 
     if (!mounted) return;

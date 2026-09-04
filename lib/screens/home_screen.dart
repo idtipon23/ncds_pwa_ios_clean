@@ -271,58 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return '$weekdayที่ $day $month $year';
   }
-
-  void _handleLogout() {
-    showDialog(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.logout_rounded, color: Color(0xFFD85A30)),
-            SizedBox(width: 8),
-            Text(
-              'ออกจากระบบ',
-              style: TextStyle(fontWeight: FontWeight.bold, color: primaryTextColor),
-            ),
-          ],
-        ),
-        content: const Text(
-          'คุณต้องการออกจากระบบใช่หรือไม่?',
-          style: TextStyle(color: secondaryTextColor, fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD85A30),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await PatientProfileService().clearLocalIdentity();
-                await AuthService().signOut();
-                if (!mounted) return;
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                  (route) => false,
-                );
-              } catch (e) {
-                debugPrint('Logout error: $e');
-              }
-            },
-            child: const Text('ออกจากระบบ', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+ 
 
   @override
   Widget build(BuildContext context) {
@@ -762,33 +711,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-                border: Border.all(
-                  color: const Color(0xFFD85A30).withValues(alpha: 0.25),
-                  width: 1.5,
-                ),
-              ),
-              child: IconButton(
-                onPressed: _handleLogout,
-                icon: const Icon(
-                  Icons.logout_rounded,
-                  color: Color(0xFFD85A30),
-                  size: 20,
-                ),
-                tooltip: 'ออกจากระบบ',
-              ),
-            ),
+            const SizedBox(width: 8),            
           ],
         ),
       ],
