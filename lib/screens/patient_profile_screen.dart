@@ -6,7 +6,9 @@ import '../services/patient_profile_service.dart';
 import '../services/patient_database_service.dart';
 import '../services/vital_repository.dart';
 import '../services/th_cv_risk_calculator.dart';
+import '../services/auth_service.dart';
 import '../widgets/bmi_bar_chart.dart';
+import 'login_page.dart';
 
 class PatientProfileScreen extends StatefulWidget {
   const PatientProfileScreen({super.key});
@@ -53,7 +55,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   // 🔔 ตัวแปรสำหรับการแจ้งเตือน LINE
   bool _notifyBpInactive = true;
   String? _lineUserId;
-  String _lineRecipientRole = 'patient';
+  String _lineRecipientRole = 'patient'; // 'patient' หรือ 'caregiver'
 
   final Map<String, Map<String, dynamic>> _activityOptions = {
     'sedentary': {
@@ -274,6 +276,196 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
   }
 
+  // 🛡️ ฟังก์ชันล้างข้อมูลทั้งหมดออกจากระบบ (Right to Erasure)
+  Future<void> _executePurgeAllData() async {
+    setState(() => _isSaving = true);
+    final supabase = Supabase.instance.client;
+
+    try {
+      final patientId = await _profileService.getCurrentPatientId();
+
+      if (patientId != null && patientId.isNotEmpty) {
+        // ลบข้อมูลที่ผูกกับคนไข้ทั้งหมด
+        await Future.wait([
+          supabase.from('vital_signs').delete().eq('patient_id', patientId),
+          supabase.from('food_logs').delete().eq('patient_id', patientId),
+          supabase.from('medication_logs').delete().eq('patient_id', patientId),
+          supabase.from('medication_adherence_logs').delete().eq('patient_id', patientId),
+          supabase.from('lab_results').delete().eq('patient_id', patientId),
+          supabase.from('appointments').delete().eq('patient_id', patientId),
+          supabase.from('clinical_alerts').delete().eq('patient_id', patientId),
+          supabase.from('staff_notes').delete().eq('patient_id', patientId),
+        ]);
+
+        // ลบข้อมูลโปรไฟล์คนไข้
+        await supabase.from('patients').delete().eq('id', patientId);
+      }
+
+      // ล้างข้อมูลในเครื่องและ Sign Out
+      await _profileService.clearLocalIdentity();
+      await AuthService().signOut();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ลบข้อมูลทั้งหมดออกจากระบบเรียบร้อยแล้ว'),
+          backgroundColor: emeraldTheme,
+        ),
+      );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      debugPrint('Error purging data: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการลบข้อมูล: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
+  }
+
+  // 🛡️ Modal ยืนยันการลบข้อมูล (พิมพ์ข้อความเพื่อยืนยัน)
+  void _showPurgeConfirmationDialog() {
+    final verifyController = TextEditingController();
+    bool isMatch = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: const Row(
+            children: [
+              CustomPaint(
+                size: Size(24, 24),
+                painter: TrashCanVectorPainter(color: Color(0xFFEF4444)),
+              ),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'พิทักษ์สิทธิ์: ลบข้อมูลทั้งหมด',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFEF4444),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFECACA)),
+                  ),
+                  child: const Text(
+                    '⚠️ คำเตือนสำคัญ:\nการลบนี้จะล้างประวัติสุขภาพ ความดัน ยา อาหาร ผลแล็บ และข้อมูลผู้ป่วยออกจากระบบถาวร โดยไม่สามารถกู้คืนได้อีก',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFB91C1C),
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'เพื่อยืนยันว่าไม่ได้กดพลาด กรุณาพิมพ์คำว่า:',
+                  style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                ),
+                const SizedBox(height: 4),
+                const Center(
+                  child: Text(
+                    'ลบข้อมูลถาวร',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFEF4444),
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: verifyController,
+                  autofocus: true,
+                  style: const TextStyle(fontSize: 13, color: primaryTextColor),
+                  decoration: InputDecoration(
+                    hintText: 'พิมพ์ "ลบข้อมูลถาวร" ที่นี่',
+                    hintStyle: const TextStyle(color: mutedTextColor, fontSize: 12),
+                    filled: true,
+                    fillColor: const Color(0xFFFAFAFA),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      isMatch = val.trim() == 'ลบข้อมูลถาวร';
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isMatch ? const Color(0xFFEF4444) : Colors.grey.shade300,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                    ),
+                    onPressed: isMatch
+                        ? () {
+                            Navigator.pop(ctx);
+                            _executePurgeAllData();
+                          }
+                        : null,
+                    child: const Text(
+                      'ยืนยันลบทั้งหมด',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // 🔔 1. การ์ด LINE แบบมินิมอล Vector
   Widget _buildLineNotificationSettingCard() {
     final bool isLineConnected = _lineUserId != null && _lineUserId!.isNotEmpty;
@@ -468,7 +660,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // ตัวเลือก Role: คนไข้ VS ญาติ
                 Row(
                   children: [
                     Expanded(
@@ -555,7 +746,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // กล่องแสดงรหัส 6 หลัก (Pairing Code)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
@@ -601,7 +791,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // กล่องกรอก User ID ขั้นสูง
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: const Text(
@@ -1291,6 +1480,58 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                               ),
                       ),
                     ),
+                    const SizedBox(height: 24),
+
+                    // 🚨 โซนพิทักษ์สิทธิ์คนไข้: ขอลบ/ล้างข้อมูลทั้งหมดออกจากระบบ
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFECACA), width: 1.2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'การจัดการความเป็นส่วนตัวและสิทธิ์ผู้ป่วย',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFB91C1C),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'หากท่านต้องการยกเลิกการใช้งานและล้างประวัติสุขภาพทั้งหมดออกจากระบบ สามารถดำเนินการได้ที่นี่',
+                            style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 42,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFEF4444),
+                                side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: _isSaving ? null : _showPurgeConfirmationDialog,
+                              icon: const CustomPaint(
+                                size: Size(16, 16),
+                                painter: TrashCanVectorPainter(color: Color(0xFFEF4444)),
+                              ),
+                              label: const Text(
+                                'ขอลบข้อมูลและประวัติสุขภาพทั้งหมด',
+                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -1301,7 +1542,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 }
 
 // =========================================================================
-// 🎨 Pure Vector Painters (เรนเดอร์ผ่าน Canvas ปลอดภัยจาก Tree-shaking 100%)
+// 🎨 Pure Vector Painters (เรนเดอร์ Canvas 100% ป้องกัน Tree-shaking)
 // =========================================================================
 
 enum ProfileVectorType {
@@ -1348,7 +1589,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.gender:
-        // สัญลักษณ์เพศรวม ♂ / ♀
         canvas.drawCircle(Offset(w * 0.4, h * 0.5), w * 0.25, stroke);
         canvas.drawLine(Offset(w * 0.58, h * 0.32), Offset(w * 0.85, h * 0.15), stroke);
         canvas.drawLine(Offset(w * 0.65, h * 0.15), Offset(w * 0.85, h * 0.15), stroke);
@@ -1356,7 +1596,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.cake:
-        // เค้กวันเกิด (อายุ)
         final cake = RRect.fromRectAndRadius(
           Rect.fromLTWH(w * 0.15, h * 0.45, w * 0.7, h * 0.45),
           const Radius.circular(4),
@@ -1367,7 +1606,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.weight:
-        // เครื่องชั่งน้ำหนัก
         final scale = RRect.fromRectAndRadius(
           Rect.fromLTWH(w * 0.15, h * 0.15, w * 0.7, h * 0.7),
           const Radius.circular(8),
@@ -1384,7 +1622,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.height:
-        // ตลับเมตร / วัดส่วนสูง
         canvas.drawLine(Offset(w * 0.35, h * 0.1), Offset(w * 0.35, h * 0.9), stroke);
         canvas.drawLine(Offset(w * 0.35, h * 0.2), Offset(w * 0.6, h * 0.2), stroke);
         canvas.drawLine(Offset(w * 0.35, h * 0.4), Offset(w * 0.5, h * 0.4), stroke);
@@ -1393,7 +1630,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.analytics:
-        // กราฟสถิติ BMI
         canvas.drawLine(Offset(w * 0.15, h * 0.85), Offset(w * 0.85, h * 0.85), stroke);
         canvas.drawLine(Offset(w * 0.25, h * 0.85), Offset(w * 0.25, h * 0.6), stroke..strokeWidth = 2.5);
         canvas.drawLine(Offset(w * 0.5, h * 0.85), Offset(w * 0.5, h * 0.35), stroke..strokeWidth = 2.5);
@@ -1401,7 +1637,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.activity:
-        // คนวิ่งออกกำลังกาย
         canvas.drawCircle(Offset(w * 0.65, h * 0.2), 3.0, fill);
         final run = Path()
           ..moveTo(w * 0.35, h * 0.35)
@@ -1414,7 +1649,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.medical:
-        // กระเป๋าหมอ / สัญลักษณ์ทางการแพทย์
         final kit = RRect.fromRectAndRadius(
           Rect.fromLTWH(w * 0.15, h * 0.3, w * 0.7, h * 0.58),
           const Radius.circular(5),
@@ -1426,7 +1660,6 @@ class ProfileIconVectorPainter extends CustomPainter {
         break;
 
       case ProfileVectorType.badge:
-        // เข็มกลัด / ป้ายชื่อ
         final badge = RRect.fromRectAndRadius(
           Rect.fromLTWH(w * 0.15, h * 0.2, w * 0.7, h * 0.65),
           const Radius.circular(6),
@@ -1556,11 +1789,9 @@ class CigaretteVectorPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // ตัวมวนบุหรี่
     canvas.drawRect(Rect.fromLTWH(w * 0.15, h * 0.55, w * 0.7, h * 0.2), paint);
     canvas.drawLine(Offset(w * 0.35, h * 0.55), Offset(w * 0.35, h * 0.75), paint);
 
-    // ควันบุหรี่
     final smoke = Path()
       ..moveTo(w * 0.85, h * 0.5)
       ..quadraticBezierTo(w * 0.95, h * 0.35, w * 0.85, h * 0.2)
@@ -1695,19 +1926,61 @@ class FamilyVectorPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // ผู้ใหญ่ (ซ้าย)
     canvas.drawCircle(Offset(w * 0.35, h * 0.28), w * 0.14, paint);
     final adult = Path()
       ..moveTo(w * 0.12, h * 0.85)
       ..quadraticBezierTo(w * 0.35, h * 0.55, w * 0.58, h * 0.85);
     canvas.drawPath(adult, paint);
 
-    // เด็ก/ผู้ตาม (ขวา)
     canvas.drawCircle(Offset(w * 0.72, h * 0.4), w * 0.11, paint);
     final child = Path()
       ..moveTo(w * 0.55, h * 0.85)
       ..quadraticBezierTo(w * 0.72, h * 0.62, w * 0.88, h * 0.85);
     canvas.drawPath(child, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class TrashCanVectorPainter extends CustomPainter {
+  final Color color;
+  const TrashCanVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    // ฝาถัง
+    canvas.drawLine(Offset(w * 0.15, h * 0.25), Offset(w * 0.85, h * 0.25), stroke);
+    final handle = Path()
+      ..moveTo(w * 0.35, h * 0.25)
+      ..lineTo(w * 0.35, h * 0.12)
+      ..lineTo(w * 0.65, h * 0.12)
+      ..lineTo(w * 0.65, h * 0.25);
+    canvas.drawPath(handle, stroke);
+
+    // ตัวถัง
+    final body = Path()
+      ..moveTo(w * 0.22, h * 0.25)
+      ..lineTo(w * 0.28, h * 0.85)
+      ..quadraticBezierTo(w * 0.3, h * 0.92, w * 0.4, h * 0.92)
+      ..lineTo(w * 0.6, h * 0.92)
+      ..quadraticBezierTo(w * 0.7, h * 0.92, w * 0.72, h * 0.85)
+      ..lineTo(w * 0.78, h * 0.25);
+    canvas.drawPath(body, stroke);
+
+    // เส้นขีดกลางถัง
+    canvas.drawLine(Offset(w * 0.42, h * 0.4), Offset(w * 0.42, h * 0.75), stroke);
+    canvas.drawLine(Offset(w * 0.58, h * 0.4), Offset(w * 0.58, h * 0.75), stroke);
   }
 
   @override
