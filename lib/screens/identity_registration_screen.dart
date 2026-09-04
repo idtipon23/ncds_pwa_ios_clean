@@ -82,14 +82,14 @@ class _IdentityRegistrationScreenState
     }
   }
 
-  /// 📍 ดึงรายชื่อโรงพยาบาล พร้อม Auto-fill (จำกัด Timeout 3 วินาที)
+  /// 📍 ดึงรายชื่อโรงพยาบาล พร้อม Auto-fill
   Future<void> _fetchHospitalsAndAutoFill() async {
     try {
       final response = await _supabase
           .from('hospitals')
           .select('id, name, code')
           .order('name')
-          .timeout(const Duration(seconds: 3), onTimeout: () => []);
+          .timeout(const Duration(seconds: 5));
 
       final hospitalList = List<Map<String, dynamic>>.from(response);
 
@@ -200,7 +200,7 @@ class _IdentityRegistrationScreenState
                 ? null
                 : _selectedHospitalId,
           },
-        ).timeout(const Duration(seconds: 8), onTimeout: () {
+        ).timeout(const Duration(seconds: 5), onTimeout: () {
           throw Exception('การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง');
         });
 
@@ -240,7 +240,7 @@ class _IdentityRegistrationScreenState
             .insert(newPatientData)
             .select()
             .single()
-            .timeout(const Duration(seconds: 8));
+            .timeout(const Duration(seconds: 5));
 
         await _profileService.saveProfile(inserted);
         await _saveHnToHistory(newHn);
@@ -249,11 +249,13 @@ class _IdentityRegistrationScreenState
       if (!mounted) return;
 
       if (_isExistingPatient) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       } else {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const OnboardingScreen()),

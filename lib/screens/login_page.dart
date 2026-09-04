@@ -37,11 +37,13 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (_profileService.isProfileComplete(profile)) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       } else {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(

@@ -46,7 +46,8 @@ class PatientProfileService {
             .select()
             // 📍 [แก้ไขแล้ว]: เปลี่ยนจาก 'id' เป็น 'auth_user_id'
             .eq('auth_user_id', currentUser.id)
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5));
 
         if (data != null && isProfileComplete(data)) {
           await _saveSmartMemory(
@@ -73,7 +74,8 @@ class PatientProfileService {
             .select()
             .eq('hn', cachedHn)
             .eq('hospital_id', cachedHospitalId)
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5));
 
         if (cachedData != null && isProfileComplete(cachedData)) {
           // ดึงเจอข้อมูลผู้ป่วยเดิม -> บันทึกการผูกสิทธิ์แล้วคืนค่าข้อมูลทันที!
@@ -196,7 +198,8 @@ class PatientProfileService {
           await _supabase
               .from('patients')
               .update(updatePayload)
-              .eq('id', patientId);
+              .eq('id', patientId)
+              .timeout(const Duration(seconds: 5));
         }
       } catch (e) {
         debugPrint('⚠️ Error Syncing Profile to Supabase: $e');
@@ -228,7 +231,8 @@ class PatientProfileService {
             .from('patients')
             .select()
             .eq('id', patientId)
-            .maybeSingle();
+            .maybeSingle()
+            .timeout(const Duration(seconds: 5));
 
         if (response != null) {
           // 3. 📍 เซฟข้อมูลกลับลงเครื่องแบบเนียนๆ (Self-Healing)
@@ -284,7 +288,7 @@ class PatientProfileService {
     await prefs.setBool(_onboardedKey, false);
     await prefs.remove(_lastHnKey);
     await prefs.remove(_lastHospitalIdKey);
-    await _supabase.auth.signOut();
+    await _supabase.auth.signOut().timeout(const Duration(seconds: 5));
   }
 
   Future<void> fullLogout() async {
@@ -303,7 +307,7 @@ class PatientProfileService {
     }
 
     // สั่ง Logout ออกจาก Supabase
-    await _supabase.auth.signOut();
+    await _supabase.auth.signOut().timeout(const Duration(seconds: 5));
   }
 
   /// 📍 บันทึกข้อมูลโปรไฟล์และ Smart HN ลงความจำเครื่อง
@@ -339,7 +343,8 @@ class PatientProfileService {
           .from('patients')
           .select('id')
           .eq('id', patientId)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 5));
 
       return data != null;
     } catch (e) {
@@ -353,7 +358,8 @@ class PatientProfileService {
       await _supabase
           .from('patients') // 🔴 เช็กชื่อ Table ให้ตรงกับของคุณ (เช่น 'patients' หรือ 'patient_profiles')
           .update(updatedData)
-          .eq('id', patientId);
+          .eq('id', patientId)
+          .timeout(const Duration(seconds: 5));
           
       // เซฟลงในเครื่องอีกรอบเพื่อให้อัปเดตตรงกัน
       await saveProfile(updatedData); 

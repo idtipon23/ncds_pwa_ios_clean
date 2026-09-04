@@ -53,7 +53,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   // 🔔 ตัวแปรสำหรับการแจ้งเตือน LINE
   bool _notifyBpInactive = true;
   String? _lineUserId;
-  String _lineRecipientRole = 'patient'; // 'patient' หรือ 'caregiver'
+  String _lineRecipientRole = 'patient';
 
   final Map<String, Map<String, dynamic>> _activityOptions = {
     'sedentary': {
@@ -274,7 +274,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     }
   }
 
-  // 🔔 1. การ์ด LINE แบบมินิมอล ไม่รกหน้าจอ
+  // 🔔 1. การ์ด LINE แบบมินิมอล Vector
   Widget _buildLineNotificationSettingCard() {
     final bool isLineConnected = _lineUserId != null && _lineUserId!.isNotEmpty;
     final bool isCaregiver = _lineRecipientRole == 'caregiver';
@@ -307,7 +307,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: const Color(0xFF06C755).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF06C755), size: 20),
+                    child: CustomPaint(
+                      size: const Size(20, 20),
+                      painter: BellVectorPainter(color: const Color(0xFF06C755)),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   const Text(
@@ -350,10 +353,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
             child: Row(
               children: [
-                Icon(
-                  isLineConnected ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                  color: isLineConnected ? emeraldTheme : const Color(0xFFD97706),
-                  size: 16,
+                CustomPaint(
+                  size: const Size(16, 16),
+                  painter: isLineConnected
+                      ? CheckCircleVectorPainter(color: emeraldTheme)
+                      : InfoVectorPainter(color: const Color(0xFFD97706)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -400,13 +404,12 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     );
   }
 
-  // 🔔 2. Pop-up Modal จัดการเชื่อมต่อ LINE พร้อมเลือก คนไข้ VS ญาติ
-  void _showLineConnectionDialog() async { // 👈 เติม async ตรงนี้
+  // 🔔 2. Pop-up Modal จัดการเชื่อมต่อ LINE
+  void _showLineConnectionDialog() async {
     String selectedRole = _lineRecipientRole;
     final manualIdCtrl = TextEditingController(text: _lineUserId ?? '');
     String pairingCode = (100000 + Random().nextInt(900000)).toString();
 
-    // ⚡ บันทึกรหัส 6 หลักลง Supabase ทันทีที่เปิด Pop-up เพื่อให้ LINE จับคู่ได้เลย
     final patientId = await _profileService.getCurrentPatientId();
     if (patientId != null) {
       await Supabase.instance.client.from('patients').update({
@@ -435,7 +438,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   color: const Color(0xFF06C755).withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF06C755), size: 22),
+                child: CustomPaint(
+                  size: const Size(22, 22),
+                  painter: ChatBubbleVectorPainter(color: const Color(0xFF06C755)),
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -481,10 +487,12 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           ),
                           child: Column(
                             children: [
-                              Icon(
-                                Icons.person_rounded,
-                                color: selectedRole == 'patient' ? emeraldTheme : secondaryTextColor,
-                                size: 22,
+                              CustomPaint(
+                                size: const Size(22, 22),
+                                painter: ProfileIconVectorPainter(
+                                  type: ProfileVectorType.person,
+                                  color: selectedRole == 'patient' ? emeraldTheme : secondaryTextColor,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -517,10 +525,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           ),
                           child: Column(
                             children: [
-                              Icon(
-                                Icons.family_restroom_rounded,
-                                color: selectedRole == 'caregiver' ? const Color(0xFFD97706) : secondaryTextColor,
-                                size: 22,
+                              CustomPaint(
+                                size: const Size(22, 22),
+                                painter: FamilyVectorPainter(
+                                  color: selectedRole == 'caregiver' ? const Color(0xFFD97706) : secondaryTextColor,
+                                ),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -592,7 +601,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // กล่องกรอก User ID ด้วยตนเอง (สำหรับ Manual / Test)
+                // กล่องกรอก User ID ขั้นสูง
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: const Text(
@@ -689,11 +698,17 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
+  InputDecoration _inputDecoration(String label, ProfileVectorType iconType) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: secondaryTextColor, fontSize: 13),
-      prefixIcon: Icon(icon, color: earthyBrown, size: 20),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: CustomPaint(
+          size: const Size(20, 20),
+          painter: ProfileIconVectorPainter(type: iconType, color: earthyBrown),
+        ),
+      ),
       filled: true,
       fillColor: const Color(0xFFFAFAFA),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -732,11 +747,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.local_fire_department_rounded, color: Color(0xFFD97B4F), size: 24),
-              SizedBox(width: 8),
-              Text(
+              CustomPaint(
+                size: const Size(24, 24),
+                painter: FireVectorPainter(color: const Color(0xFFD97B4F)),
+              ),
+              const SizedBox(width: 8),
+              const Text(
                 'เป้าหมายพลังงานรายวัน (TDEE)',
                 style: TextStyle(
                   fontSize: 16,
@@ -804,7 +822,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.tips_and_updates, color: Color(0xFFB45309), size: 18),
+                CustomPaint(
+                  size: const Size(18, 18),
+                  painter: BulbVectorPainter(color: const Color(0xFFB45309)),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -883,7 +904,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: riskColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.favorite_rounded, color: riskColor, size: 20),
+                    child: CustomPaint(
+                      size: const Size(20, 20),
+                      painter: HeartVectorPainter(color: riskColor),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   const Text(
@@ -1005,7 +1029,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: primaryTextColor),
+          icon: CustomPaint(
+            size: const Size(18, 18),
+            painter: BackArrowVectorPainter(color: primaryTextColor),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -1024,7 +1051,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     _buildThaiCvdRiskCard(),
                     const SizedBox(height: 16),
 
-                    // 🌟 การ์ดจัดการแจ้งเตือน LINE (Minimal)
                     _buildLineNotificationSettingCard(),
                     const SizedBox(height: 16),
 
@@ -1045,11 +1071,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.badge_outlined, color: earthyBrown, size: 22),
-                              SizedBox(width: 8),
-                              Text(
+                              CustomPaint(
+                                size: const Size(22, 22),
+                                painter: ProfileIconVectorPainter(type: ProfileVectorType.badge, color: earthyBrown),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
                                 'ข้อมูลร่างกายและกิจกรรม',
                                 style: TextStyle(
                                   fontSize: 16,
@@ -1067,7 +1096,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 child: TextFormField(
                                   controller: _fNameController,
                                   style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('ชื่อ', Icons.person_outline),
+                                  decoration: _inputDecoration('ชื่อ', ProfileVectorType.person),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'กรุณากรอกชื่อ' : null,
                                 ),
@@ -1077,7 +1106,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 child: TextFormField(
                                   controller: _lNameController,
                                   style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('นามสกุล', Icons.person),
+                                  decoration: _inputDecoration('นามสกุล', ProfileVectorType.person),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'กรุณากรอกนามสกุล' : null,
                                 ),
@@ -1092,7 +1121,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 child: DropdownButtonFormField<String>(
                                   value: _gender,
                                   style: const TextStyle(color: primaryTextColor, fontSize: 15),
-                                  decoration: _inputDecoration('เพศกำเนิด', Icons.wc_outlined),
+                                  decoration: _inputDecoration('เพศกำเนิด', ProfileVectorType.gender),
                                   items: const [
                                     DropdownMenuItem(value: 'ชาย', child: Text('ชาย')),
                                     DropdownMenuItem(value: 'หญิง', child: Text('หญิง')),
@@ -1113,7 +1142,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _ageController,
                                   keyboardType: TextInputType.number,
                                   style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('อายุ (ปี)', Icons.cake_outlined),
+                                  decoration: _inputDecoration('อายุ (ปี)', ProfileVectorType.cake),
                                   onChanged: (_) => setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุอายุ' : null,
@@ -1130,7 +1159,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _weightController,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('น้ำหนัก (กก.)', Icons.monitor_weight_outlined),
+                                  decoration: _inputDecoration('น้ำหนัก (กก.)', ProfileVectorType.weight),
                                   onChanged: (_) => setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุน้ำหนัก' : null,
@@ -1142,7 +1171,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _heightController,
                                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('ส่วนสูง (ซม.)', Icons.height),
+                                  decoration: _inputDecoration('ส่วนสูง (ซม.)', ProfileVectorType.height),
                                   onChanged: (_) => setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุส่วนสูง' : null,
@@ -1154,7 +1183,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _bmiController,
                                   readOnly: true,
                                   style: const TextStyle(color: primaryTextColor, fontWeight: FontWeight.bold),
-                                  decoration: _inputDecoration('BMI', Icons.analytics_outlined),
+                                  decoration: _inputDecoration('BMI', ProfileVectorType.analytics),
                                 ),
                               ),
                             ],
@@ -1170,7 +1199,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           DropdownButtonFormField<String>(
                             value: _activityLevel,
                             isExpanded: true,
-                            decoration: _inputDecoration('กิจกรรมและการออกกำลังกาย', Icons.directions_run_rounded),
+                            decoration: _inputDecoration('กิจกรรมและการออกกำลังกาย', ProfileVectorType.activity),
                             items: _activityOptions.entries.map((e) {
                               return DropdownMenuItem<String>(
                                 value: e.key,
@@ -1194,7 +1223,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           TextFormField(
                             controller: _diseaseController,
                             style: const TextStyle(color: primaryTextColor),
-                            decoration: _inputDecoration('โรคประจำตัว', Icons.medical_services_outlined),
+                            decoration: _inputDecoration('โรคประจำตัว', ProfileVectorType.medical),
                           ),
                           const SizedBox(height: 16),
 
@@ -1225,9 +1254,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              secondary: Icon(
-                                Icons.smoking_rooms,
-                                color: _isSmoker ? const Color(0xFFEF4444) : emeraldTheme,
+                              secondary: CustomPaint(
+                                size: const Size(22, 22),
+                                painter: CigaretteVectorPainter(
+                                  color: _isSmoker ? const Color(0xFFEF4444) : emeraldTheme,
+                                ),
                               ),
                               value: _isSmoker,
                               activeColor: const Color(0xFFEF4444),
@@ -1267,4 +1298,418 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
     );
   }
+}
+
+// =========================================================================
+// 🎨 Pure Vector Painters (เรนเดอร์ผ่าน Canvas ปลอดภัยจาก Tree-shaking 100%)
+// =========================================================================
+
+enum ProfileVectorType {
+  person,
+  gender,
+  cake,
+  weight,
+  height,
+  analytics,
+  activity,
+  medical,
+  badge,
+}
+
+class ProfileIconVectorPainter extends CustomPainter {
+  final ProfileVectorType type;
+  final Color color;
+
+  ProfileIconVectorPainter({required this.type, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final w = size.width;
+    final h = size.height;
+
+    switch (type) {
+      case ProfileVectorType.person:
+        canvas.drawCircle(Offset(w * 0.5, h * 0.32), w * 0.22, stroke);
+        final body = Path()
+          ..moveTo(w * 0.15, h * 0.85)
+          ..quadraticBezierTo(w * 0.5, h * 0.55, w * 0.85, h * 0.85);
+        canvas.drawPath(body, stroke);
+        break;
+
+      case ProfileVectorType.gender:
+        // สัญลักษณ์เพศรวม ♂ / ♀
+        canvas.drawCircle(Offset(w * 0.4, h * 0.5), w * 0.25, stroke);
+        canvas.drawLine(Offset(w * 0.58, h * 0.32), Offset(w * 0.85, h * 0.15), stroke);
+        canvas.drawLine(Offset(w * 0.65, h * 0.15), Offset(w * 0.85, h * 0.15), stroke);
+        canvas.drawLine(Offset(w * 0.85, h * 0.15), Offset(w * 0.85, h * 0.35), stroke);
+        break;
+
+      case ProfileVectorType.cake:
+        // เค้กวันเกิด (อายุ)
+        final cake = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.15, h * 0.45, w * 0.7, h * 0.45),
+          const Radius.circular(4),
+        );
+        canvas.drawRRect(cake, stroke);
+        canvas.drawLine(Offset(w * 0.5, h * 0.25), Offset(w * 0.5, h * 0.45), stroke);
+        canvas.drawCircle(Offset(w * 0.5, h * 0.18), 2.0, fill);
+        break;
+
+      case ProfileVectorType.weight:
+        // เครื่องชั่งน้ำหนัก
+        final scale = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.15, h * 0.15, w * 0.7, h * 0.7),
+          const Radius.circular(8),
+        );
+        canvas.drawRRect(scale, stroke);
+        canvas.drawArc(
+          Rect.fromLTWH(w * 0.32, h * 0.25, w * 0.36, h * 0.36),
+          pi,
+          pi,
+          false,
+          stroke,
+        );
+        canvas.drawLine(Offset(w * 0.5, h * 0.43), Offset(w * 0.58, h * 0.32), stroke);
+        break;
+
+      case ProfileVectorType.height:
+        // ตลับเมตร / วัดส่วนสูง
+        canvas.drawLine(Offset(w * 0.35, h * 0.1), Offset(w * 0.35, h * 0.9), stroke);
+        canvas.drawLine(Offset(w * 0.35, h * 0.2), Offset(w * 0.6, h * 0.2), stroke);
+        canvas.drawLine(Offset(w * 0.35, h * 0.4), Offset(w * 0.5, h * 0.4), stroke);
+        canvas.drawLine(Offset(w * 0.35, h * 0.6), Offset(w * 0.6, h * 0.6), stroke);
+        canvas.drawLine(Offset(w * 0.35, h * 0.8), Offset(w * 0.5, h * 0.8), stroke);
+        break;
+
+      case ProfileVectorType.analytics:
+        // กราฟสถิติ BMI
+        canvas.drawLine(Offset(w * 0.15, h * 0.85), Offset(w * 0.85, h * 0.85), stroke);
+        canvas.drawLine(Offset(w * 0.25, h * 0.85), Offset(w * 0.25, h * 0.6), stroke..strokeWidth = 2.5);
+        canvas.drawLine(Offset(w * 0.5, h * 0.85), Offset(w * 0.5, h * 0.35), stroke..strokeWidth = 2.5);
+        canvas.drawLine(Offset(w * 0.75, h * 0.85), Offset(w * 0.75, h * 0.48), stroke..strokeWidth = 2.5);
+        break;
+
+      case ProfileVectorType.activity:
+        // คนวิ่งออกกำลังกาย
+        canvas.drawCircle(Offset(w * 0.65, h * 0.2), 3.0, fill);
+        final run = Path()
+          ..moveTo(w * 0.35, h * 0.35)
+          ..lineTo(w * 0.55, h * 0.4)
+          ..lineTo(w * 0.45, h * 0.65)
+          ..lineTo(w * 0.65, h * 0.85);
+        canvas.drawPath(run, stroke);
+        canvas.drawLine(Offset(w * 0.55, h * 0.4), Offset(w * 0.75, h * 0.5), stroke);
+        canvas.drawLine(Offset(w * 0.45, h * 0.65), Offset(w * 0.25, h * 0.8), stroke);
+        break;
+
+      case ProfileVectorType.medical:
+        // กระเป๋าหมอ / สัญลักษณ์ทางการแพทย์
+        final kit = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.15, h * 0.3, w * 0.7, h * 0.58),
+          const Radius.circular(5),
+        );
+        canvas.drawRRect(kit, stroke);
+        canvas.drawArc(Rect.fromLTWH(w * 0.35, h * 0.15, w * 0.3, h * 0.25), pi, pi, false, stroke);
+        canvas.drawLine(Offset(w * 0.5, h * 0.45), Offset(w * 0.5, h * 0.72), stroke);
+        canvas.drawLine(Offset(w * 0.36, h * 0.58), Offset(w * 0.64, h * 0.58), stroke);
+        break;
+
+      case ProfileVectorType.badge:
+        // เข็มกลัด / ป้ายชื่อ
+        final badge = RRect.fromRectAndRadius(
+          Rect.fromLTWH(w * 0.15, h * 0.2, w * 0.7, h * 0.65),
+          const Radius.circular(6),
+        );
+        canvas.drawRRect(badge, stroke);
+        canvas.drawLine(Offset(w * 0.3, h * 0.4), Offset(w * 0.7, h * 0.4), stroke);
+        canvas.drawLine(Offset(w * 0.3, h * 0.6), Offset(w * 0.55, h * 0.6), stroke);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class BackArrowVectorPainter extends CustomPainter {
+  final Color color;
+  BackArrowVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path()
+      ..moveTo(size.width * 0.65, size.height * 0.15)
+      ..lineTo(size.width * 0.25, size.height * 0.5)
+      ..lineTo(size.width * 0.65, size.height * 0.85);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class HeartVectorPainter extends CustomPainter {
+  final Color color;
+  HeartVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = color..style = PaintingStyle.fill;
+    final w = size.width;
+    final h = size.height;
+
+    final path = Path()
+      ..moveTo(w * 0.5, h * 0.85)
+      ..cubicTo(w * 0.1, h * 0.55, 0, h * 0.3, w * 0.25, h * 0.15)
+      ..cubicTo(w * 0.4, h * 0.05, w * 0.5, h * 0.22, w * 0.5, h * 0.22)
+      ..cubicTo(w * 0.5, h * 0.22, w * 0.6, h * 0.05, w * 0.75, h * 0.15)
+      ..cubicTo(w, h * 0.3, w * 0.9, h * 0.55, w * 0.5, h * 0.85)
+      ..close();
+
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class FireVectorPainter extends CustomPainter {
+  final Color color;
+  FireVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = color..style = PaintingStyle.fill;
+    final w = size.width;
+    final h = size.height;
+
+    final path = Path()
+      ..moveTo(w * 0.5, h * 0.1)
+      ..cubicTo(w * 0.6, h * 0.3, w * 0.85, h * 0.45, w * 0.85, h * 0.68)
+      ..cubicTo(w * 0.85, h * 0.88, w * 0.7, h * 0.95, w * 0.5, h * 0.95)
+      ..cubicTo(w * 0.3, h * 0.95, w * 0.15, h * 0.88, w * 0.15, h * 0.68)
+      ..cubicTo(w * 0.15, h * 0.5, w * 0.3, h * 0.35, w * 0.4, h * 0.4)
+      ..cubicTo(w * 0.35, h * 0.25, w * 0.45, h * 0.15, w * 0.5, h * 0.1)
+      ..close();
+
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class BulbVectorPainter extends CustomPainter {
+  final Color color;
+  BulbVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8;
+
+    final w = size.width;
+    final h = size.height;
+
+    canvas.drawCircle(Offset(w * 0.5, h * 0.4), w * 0.32, paint);
+    canvas.drawLine(Offset(w * 0.38, h * 0.75), Offset(w * 0.62, h * 0.75), paint);
+    canvas.drawLine(Offset(w * 0.42, h * 0.88), Offset(w * 0.58, h * 0.88), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class CigaretteVectorPainter extends CustomPainter {
+  final Color color;
+  CigaretteVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    // ตัวมวนบุหรี่
+    canvas.drawRect(Rect.fromLTWH(w * 0.15, h * 0.55, w * 0.7, h * 0.2), paint);
+    canvas.drawLine(Offset(w * 0.35, h * 0.55), Offset(w * 0.35, h * 0.75), paint);
+
+    // ควันบุหรี่
+    final smoke = Path()
+      ..moveTo(w * 0.85, h * 0.5)
+      ..quadraticBezierTo(w * 0.95, h * 0.35, w * 0.85, h * 0.2)
+      ..moveTo(w * 0.72, h * 0.5)
+      ..quadraticBezierTo(w * 0.82, h * 0.35, w * 0.72, h * 0.2);
+    canvas.drawPath(smoke, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class BellVectorPainter extends CustomPainter {
+  final Color color;
+  BellVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8;
+
+    final w = size.width;
+    final h = size.height;
+
+    final path = Path()
+      ..moveTo(w * 0.5, h * 0.15)
+      ..quadraticBezierTo(w * 0.75, h * 0.35, w * 0.75, h * 0.65)
+      ..lineTo(w * 0.85, h * 0.75)
+      ..lineTo(w * 0.15, h * 0.75)
+      ..lineTo(w * 0.25, h * 0.65)
+      ..quadraticBezierTo(w * 0.25, h * 0.35, w * 0.5, h * 0.15)
+      ..close();
+    canvas.drawPath(path, paint);
+    canvas.drawCircle(Offset(w * 0.5, h * 0.85), 2.2, Paint()..color = color..style = PaintingStyle.fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class CheckCircleVectorPainter extends CustomPainter {
+  final Color color;
+  CheckCircleVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+
+    final w = size.width;
+    final h = size.height;
+
+    canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.44, paint);
+
+    final check = Path()
+      ..moveTo(w * 0.3, h * 0.5)
+      ..lineTo(w * 0.44, h * 0.65)
+      ..lineTo(w * 0.72, h * 0.35);
+    canvas.drawPath(check, paint..strokeWidth = 1.8);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class InfoVectorPainter extends CustomPainter {
+  final Color color;
+  InfoVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+
+    final w = size.width;
+    final h = size.height;
+
+    canvas.drawCircle(Offset(w * 0.5, h * 0.5), w * 0.44, paint);
+    canvas.drawCircle(Offset(w * 0.5, h * 0.3), 1.3, Paint()..color = color..style = PaintingStyle.fill);
+    canvas.drawLine(Offset(w * 0.5, h * 0.45), Offset(w * 0.5, h * 0.72), paint..strokeWidth = 1.8);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class ChatBubbleVectorPainter extends CustomPainter {
+  final Color color;
+  ChatBubbleVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()..color = color..style = PaintingStyle.fill;
+    final w = size.width;
+    final h = size.height;
+
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.1, h * 0.15, w * 0.8, h * 0.6),
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rrect, fill);
+
+    final tail = Path()
+      ..moveTo(w * 0.25, h * 0.75)
+      ..lineTo(w * 0.15, h * 0.92)
+      ..lineTo(w * 0.4, h * 0.75);
+    canvas.drawPath(tail, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class FamilyVectorPainter extends CustomPainter {
+  final Color color;
+  FamilyVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..strokeCap = StrokeCap.round;
+
+    final w = size.width;
+    final h = size.height;
+
+    // ผู้ใหญ่ (ซ้าย)
+    canvas.drawCircle(Offset(w * 0.35, h * 0.28), w * 0.14, paint);
+    final adult = Path()
+      ..moveTo(w * 0.12, h * 0.85)
+      ..quadraticBezierTo(w * 0.35, h * 0.55, w * 0.58, h * 0.85);
+    canvas.drawPath(adult, paint);
+
+    // เด็ก/ผู้ตาม (ขวา)
+    canvas.drawCircle(Offset(w * 0.72, h * 0.4), w * 0.11, paint);
+    final child = Path()
+      ..moveTo(w * 0.55, h * 0.85)
+      ..quadraticBezierTo(w * 0.72, h * 0.62, w * 0.88, h * 0.85);
+    canvas.drawPath(child, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -15,7 +15,9 @@ class AuthService {
       }
       
       // b) ถ้ายังไม่มี ให้เรียก signInAnonymously และคืนค่า
-      return await _supabase.auth.signInAnonymously();
+      return await _supabase.auth
+          .signInAnonymously()
+          .timeout(const Duration(seconds: 5));
     } catch (e) {
       // c) จัดการ error
       print('Error signing in anonymously: $e');
@@ -25,7 +27,7 @@ class AuthService {
 
   // ฟังก์ชันออกจากระบบ
   Future<void> signOut() async {
-    await _supabase.auth.signOut();
+    await _supabase.auth.signOut().timeout(const Duration(seconds: 5));
   }
 
   // ดึงข้อมูล User ปัจจุบัน
