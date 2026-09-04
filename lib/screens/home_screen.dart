@@ -318,9 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildHealthTreeBanner(),
                           const SizedBox(height: 18),
 
-                          // 📅 แถบวันนัดหมาย (แสดงทั้งแบบมีนัด และสแตนด์บายรอ)
-                          _buildAppointmentBanner(),
-                          const SizedBox(height: 18),
 
                           // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
                           _buildHealthIndicatorCard(),
