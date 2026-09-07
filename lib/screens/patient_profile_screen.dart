@@ -454,15 +454,29 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   }
 
   // 🔔 2. Pop-up Modal จัดการเชื่อมต่อ LINE พร้อมเลือก คนไข้ VS ญาติ
-  void _showLineConnectionDialog() async {
-    // 👈 เติม async ตรงนี้
+  Future<void> _showLineConnectionDialog() async {
     String selectedRole = _lineRecipientRole;
     final manualIdCtrl = TextEditingController(text: _lineUserId ?? '');
-    String pairingCode = (100000 + Random().nextInt(900000)).toString();
+    
+    // 1. สุ่มรหัส 6 หลักใหม่เสมอ
+    final String pairingCode = (100000 + Random().nextInt(900000)).toString();
 
-    // ⚡ บันทึกรหัส 6 หลักลง Supabase ทันทีที่เปิด Pop-up เพื่อให้ LINE จับคู่ได้เลย
+    // 2. ดึง Patient ID
     final patientId = await _profileService.getCurrentPatientId();
-    if (patientId != null) {
+    if (patientId == null || patientId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ไม่พบข้อมูลผู้ป่วย กรุณาเข้าสู่ระบบใหม่อีกครั้ง'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ⚡ 3. บันทึกรหัส 6 หลักลง Supabase จริงและรอให้เสร็จ (await) ก่อนเปิดหน้าต่าง
+    try {
       await Supabase.instance.client.from('patients').update({
         'line_recipient_role': selectedRole,
         'line_pairing_code': pairingCode,
@@ -471,18 +485,29 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             .toUtc()
             .toIso8601String(),
       }).eq('id', patientId);
+    } catch (e) {
+      debugPrint("Error saving pairing code to DB: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ไม่สามารถสร้างรหัสเชื่อมต่อได้: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+      return;
     }
 
     if (!mounted) return;
 
+    // 4. แสดงผล Dialog
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           contentPadding: const EdgeInsets.symmetric(horizontal: 20),
           title: Row(
@@ -529,8 +554,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   children: [
                     Expanded(
                       child: InkWell(
-                        onTap: () =>
-                            setDialogState(() => selectedRole = 'patient'),
+                        onTap: () async {
+                          setDialogState(() => selectedRole = 'patient');
+                          // อัปเดตบทบาทลง DB ทันทีเมื่อเปลี่ยน
+                          await Supabase.instance.client
+                              .from('patients')
+                              .update({'line_recipient_role': 'patient'})
+                              .eq('id', patientId);
+                        },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -575,8 +606,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: InkWell(
-                        onTap: () =>
-                            setDialogState(() => selectedRole = 'caregiver'),
+                        onTap: () async {
+                          setDialogState(() => selectedRole = 'caregiver');
+                          // อัปเดตบทบาทลง DB ทันทีเมื่อเปลี่ยน
+                          await Supabase.instance.client
+                              .from('patients')
+                              .update({'line_recipient_role': 'caregiver'})
+                              .eq('id', patientId);
+                        },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -662,9 +699,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         child: SelectableText(
                           '${pairingCode.substring(0, 3)}-${pairingCode.substring(3)}',
                           style: const TextStyle(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            letterSpacing: 2.0,
+                            letterSpacing: 3.0,
                             color: emeraldTheme,
                           ),
                         ),
@@ -679,7 +716,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // กล่องกรอก User ID ด้วยตนเอง (สำหรับ Manual / Test)
+                // กล่องกรอก User ID ด้วยตนเอง (กรณีระบุตรง)
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: const Text(
@@ -735,21 +772,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     ),
                     onPressed: () async {
                       final inputId = manualIdCtrl.text.trim();
-                      final patientId =
-                          await _profileService.getCurrentPatientId();
-
-                      if (patientId != null) {
+                      if (inputId.isNotEmpty) {
                         final updatePayload = {
                           'line_recipient_role': selectedRole,
-                          'line_pairing_code': pairingCode,
-                          'line_pairing_expires_at': DateTime.now()
-                              .add(const Duration(minutes: 10))
-                              .toUtc()
-                              .toIso8601String(),
-                          if (inputId.isNotEmpty) 'line_user_id': inputId,
-                          if (inputId.isNotEmpty)
-                            'line_linked_at':
-                                DateTime.now().toUtc().toIso8601String(),
+                          'line_user_id': inputId,
+                          'line_linked_at': DateTime.now().toUtc().toIso8601String(),
                         };
 
                         await Supabase.instance.client
@@ -761,7 +788,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
                         setState(() {
                           _lineRecipientRole = selectedRole;
-                          if (inputId.isNotEmpty) _lineUserId = inputId;
+                          _lineUserId = inputId;
                         });
                       }
 
@@ -769,14 +796,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                              'บันทึกการตั้งค่าแจ้งเตือนไปยัง [$selectedRole] แล้ว'),
+                              'บันทึกการตั้งค่าแจ้งเตือนไปยัง [${selectedRole == 'caregiver' ? 'ญาติ/ผู้ดูแล' : 'คนไข้'}] แล้ว'),
                           backgroundColor: emeraldTheme,
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
                     child: const Text(
-                      'บันทึกการตั้งค่า',
+                      'เสร็จสิ้น',
                       style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
