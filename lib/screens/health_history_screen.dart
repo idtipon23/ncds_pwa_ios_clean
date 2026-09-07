@@ -171,12 +171,18 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
     final double ldlVal = (labData['ldl'] as num?)?.toDouble() ?? 0.0;
     final double fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble() ?? 0.0;
     final double crVal = (labData['creatinine'] as num?)?.toDouble() ?? 0.0;
+    final double kVal = (labData['potassium'] as num?)?.toDouble() ?? 0.0;
+    final double naVal = (labData['sodium'] as num?)?.toDouble() ?? 0.0;
+    final double uaVal = (labData['uric_acid'] as num?)?.toDouble() ?? 0.0;
 
     final tcCtrl = TextEditingController(text: tcVal > 0 ? tcVal.toString() : '');
     final hdlCtrl = TextEditingController(text: hdlVal > 0 ? hdlVal.toString() : '');
     final ldlCtrl = TextEditingController(text: ldlVal > 0 ? ldlVal.toString() : '');
     final fbsCtrl = TextEditingController(text: fbsVal > 0 ? fbsVal.toString() : '');
     final crCtrl = TextEditingController(text: crVal > 0 ? crVal.toString() : '');
+    final kCtrl = TextEditingController(text: kVal > 0 ? kVal.toString() : '');
+    final naCtrl = TextEditingController(text: naVal > 0 ? naVal.toString() : '');
+    final uaCtrl = TextEditingController(text: uaVal > 0 ? uaVal.toString() : '');
 
     showDialog(
       context: context,
@@ -212,7 +218,7 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'AI ได้ดึงค่าตัวเลขจากใบแล็บ กรุณาตรวจสอบความถูกต้อง',
+                  'AI ได้ดึงค่าตัวเลขจากใบแล็บ กรุณาตรวจสอบและกรอกค่าเกลือแร่เพิ่มเติม',
                   style: TextStyle(fontSize: 12, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 14),
@@ -223,31 +229,55 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: hdlCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('HDL (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: fbsCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('FBS (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: crCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Creatinine (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // 🌟 แถวเกลือแร่สำหรับ Safety Trigger ใน CDSS
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: kCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Potassium K+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: naCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Sodium Na+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 TextField(
-                  controller: ldlCtrl,
+                  controller: uaCtrl,
                   style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('LDL (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: fbsCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('Fasting Blood Sugar (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: crCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('Creatinine (mg/dL)'),
+                  decoration: _dialogInputDecoration('Uric Acid (mg/dL)'),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ],
@@ -268,12 +298,15 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await _saveLabResult(
-                double.tryParse(tcCtrl.text) ?? 0.0,
-                double.tryParse(hdlCtrl.text) ?? 0.0,
-                double.tryParse(ldlCtrl.text) ?? 0.0,
-                double.tryParse(fbsCtrl.text) ?? 0.0,
-                double.tryParse(crCtrl.text) ?? 0.0,
-                imageBytes,
+                tc: double.tryParse(tcCtrl.text.trim()) ?? 0.0,
+                hdl: double.tryParse(hdlCtrl.text.trim()) ?? 0.0,
+                ldl: double.tryParse(ldlCtrl.text.trim()) ?? 0.0,
+                fbs: double.tryParse(fbsCtrl.text.trim()) ?? 0.0,
+                cr: double.tryParse(crCtrl.text.trim()) ?? 0.0,
+                k: double.tryParse(kCtrl.text.trim()) ?? 0.0,
+                na: double.tryParse(naCtrl.text.trim()) ?? 0.0,
+                ua: double.tryParse(uaCtrl.text.trim()) ?? 0.0,
+                imageBytes: imageBytes,
               );
             },
             child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -307,7 +340,17 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
   }
 
   // 🔬 3. บันทึกผลแล็บลงตาราง lab_results ใน Supabase
-  Future<void> _saveLabResult(double tc, double hdl, double ldl, double fbs, double cr, Uint8List imageBytes) async {
+  Future<void> _saveLabResult({
+    required double tc,
+    required double hdl,
+    required double ldl,
+    required double fbs,
+    required double cr,
+    required double k,
+    required double na,
+    required double ua,
+    required Uint8List imageBytes,
+  }) async {
     setState(() => _viewState = HistoryViewState.loading);
     try {
       final patientId = await _profileService.getCurrentPatientId();
@@ -322,13 +365,16 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
         ldl: ldl,
         fastingBloodSugar: fbs,
         creatinine: cr,
+        potassium: k,
+        sodium: na,
+        uricAcid: ua,
         imageUrl: imagePath,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('บันทึกผลแล็บสำเร็จ! พร้อมนำไปคำนวณความเสี่ยงสุขภาพ'),
+            content: Text('บันทึกผลแล็บและเกลือแร่สำเร็จ! พร้อมส่งต่อไปยังระบบ CDSS'),
             backgroundColor: emeraldTheme,
           ),
         );
@@ -1032,6 +1078,9 @@ class _HealthHistoryScreenState extends State<HealthHistoryScreen> {
                 _buildLabRow('LDL', ldl, 'mg/dL'),
                 _buildLabRow('Fasting Blood Sugar (FBS)', fbs, 'mg/dL'),
                 _buildLabRow('Creatinine', cr, 'mg/dL'),
+                _buildLabRow('Potassium (K+)', (lab['potassium'] as num?)?.toDouble(), 'mEq/L'),
+                _buildLabRow('Sodium (Na+)', (lab['sodium'] as num?)?.toDouble(), 'mEq/L'),
+                _buildLabRow('Uric Acid', (lab['uric_acid'] as num?)?.toDouble(), 'mg/dL'),
                 if (imageUrl != null && imageUrl.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   SizedBox(

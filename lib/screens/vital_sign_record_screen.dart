@@ -135,7 +135,7 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'ค่าวัดนี้ต่ำกว่าเกณฑ์ปกติ (90/60 mmHg)',
+                'ค่าวัดนี้ต่ำกว่าเกณฑ์ปกติ (100/60 mmHg)',
                 style: TextStyle(fontSize: 15, color: Colors.black87),
               ),
               const SizedBox(height: 14),
@@ -434,7 +434,7 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
       }
     }
 
-    if (sysInt < 90 || diaInt < 60) {
+    if (sysInt < 100 || diaInt < 60) {
       await _showHypotensionAlert(
         patientId: patientId,
         sys: sysInt,
@@ -524,16 +524,37 @@ class _VitalSignRecordScreenState extends State<VitalSignRecordScreen> {
         );
       }
 
+      final int sys = (data['systolic'] as num?)?.toInt() ?? 0;
+      final int dia = (data['diastolic'] as num?)?.toInt() ?? 0;
+
+      // 1. บันทึกสัญญาณชีพลง Supabase ตามปกติ
       await _dbService.saveVitalSigns(
         patientId: patientId,
-        systolic: data['systolic'] ?? 0,
-        diastolic: data['diastolic'] ?? 0,
+        systolic: sys,
+        diastolic: dia,
         pulse: data['pulse'],
         spokenFeedback: data['spoken_feedback'],
         urgencyLevel: data['urgency_level'],
         imageUrl: uploadedUrl,
       );
 
+      // -------------------------------------------------------------
+      // 🚨 2. ตรวจสอบเงื่อนไขความดันต่ำ (< 100/60 mmHg) และยิงแจ้งเตือน LINE
+      // -------------------------------------------------------------
+      if ((sys > 0 && sys < 100) || (dia > 0 && dia < 60)) {
+        Supabase.instance.client.functions.invoke('line-notifier', body: {
+          'action': 'check_hypotension_alert',
+          'patient_id': patientId,
+          'systolic': sys,
+          'diastolic': dia,
+        }).then((res) {
+          debugPrint('✅ ส่งแจ้งเตือนความดันต่ำเข้า LINE สำเร็จ: ${res.data}');
+        }).catchError((e) {
+          debugPrint('❌ ไม่สามารถส่งแจ้งเตือนความดันต่ำเข้า LINE ได้: $e');
+        });
+      }
+
+      // 3. อัปเดตข้อมูลส่วนสูง น้ำหนัก BMI และโรคประจำตัว (ถ้ามี)
       double? weight = data['weight_kg'] ?? double.tryParse(data['weight']?.toString() ?? '');
       double? height = data['height_cm'] ?? double.tryParse(data['height']?.toString() ?? '');
       String? disease = data['underlying_diseases']?.toString();

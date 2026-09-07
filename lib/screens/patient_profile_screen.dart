@@ -43,6 +43,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   double _bmr = 0.0;
   double _tdee = 0.0;
 
+  // 🩺 ตัวแปรภาวะสุขภาพเฉพาะทางสำหรับ CDSS 6 มิติ
+  bool _hasCad = false; // โรคหลอดเลือดหัวใจ / เจ็บหน้าอก
+  bool _hasHeartFailure = false; // หัวใจล้มเหลว / เหนื่อยง่าย
+  bool _hasProteinuria = false; // ไตเรื้อรัง / โปรตีนไข่ขาวรั่ว
+  bool _hasGout = false; // เกาต์ / ยูริกสูง
+  bool _hasOsa = false; // นอนกรนรุนแรง / หยุดหายใจขณะหลับ
+  bool _isPregnant = false; // ตั้งครรภ์
+
   bool _isSmoker = false;
   bool _isLoading = true;
   bool _isSaving = false;
@@ -106,6 +114,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           _notifyBpInactive = profile['notify_bp_inactive'] ?? true;
           _lineUserId = profile['line_user_id'];
           _lineRecipientRole = profile['line_recipient_role'] ?? 'patient';
+
+          // 👈 โหลดสถานะโรคเฉพาะทาง
+          _hasCad = profile['has_cad'] == true;
+          _hasHeartFailure = profile['has_heart_failure'] == true;
+          _hasProteinuria = profile['has_proteinuria'] == true;
+          _hasGout = profile['has_gout'] == true;
+          _hasOsa = profile['has_osa'] == true;
+          _isPregnant = profile['is_pregnant'] == true;
 
           if (!_activityOptions.containsKey(_activityLevel)) {
             _activityLevel = 'sedentary';
@@ -206,6 +222,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       'smokes': _isSmoker,
       'notify_bp_inactive': _notifyBpInactive,
       'line_recipient_role': _lineRecipientRole,
+      // 👈 ส่งค่า 6 มิติ
+      'has_cad': _hasCad,
+      'has_heart_failure': _hasHeartFailure,
+      'has_proteinuria': _hasProteinuria,
+      'has_gout': _hasGout,
+      'has_osa': _hasOsa,
+      'is_pregnant': _gender == 'หญิง' ? _isPregnant : false,
+      'has_cvd': _hasCad || _hasHeartFailure,
     };
 
     String? errorMessage;
@@ -232,6 +256,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         'smokes': updateData['smokes'],
         'notify_bp_inactive': updateData['notify_bp_inactive'],
         'line_recipient_role': updateData['line_recipient_role'],
+        // 👈 บันทึกลง Supabase
+        'has_cad': updateData['has_cad'],
+        'has_heart_failure': updateData['has_heart_failure'],
+        'has_proteinuria': updateData['has_proteinuria'],
+        'has_gout': updateData['has_gout'],
+        'has_osa': updateData['has_osa'],
+        'is_pregnant': updateData['is_pregnant'],
+        'has_cvd': updateData['has_cvd'],
       };
 
       if (patientId != null && patientId.isNotEmpty) {
@@ -266,9 +298,11 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           content: Text(errorMessage == null
               ? 'บันทึกข้อมูลเรียบร้อยแล้ว'
               : 'เกิดข้อผิดพลาดในการบันทึก: $errorMessage'),
-          backgroundColor: errorMessage == null ? emeraldTheme : const Color(0xFFEF4444),
+          backgroundColor:
+              errorMessage == null ? emeraldTheme : const Color(0xFFEF4444),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
     }
@@ -307,7 +341,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: const Color(0xFF06C755).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF06C755), size: 20),
+                    child: const Icon(Icons.notifications_active_rounded,
+                        color: Color(0xFF06C755), size: 20),
                   ),
                   const SizedBox(width: 10),
                   const Text(
@@ -322,16 +357,22 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isLineConnected ? const Color(0xFFEAF3E4) : const Color(0xFF06C755),
-                  foregroundColor: isLineConnected ? const Color(0xFF2E6325) : Colors.white,
+                  backgroundColor: isLineConnected
+                      ? const Color(0xFFEAF3E4)
+                      : const Color(0xFF06C755),
+                  foregroundColor:
+                      isLineConnected ? const Color(0xFF2E6325) : Colors.white,
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: _showLineConnectionDialog,
                 child: Text(
                   isLineConnected ? 'จัดการ / เปลี่ยน' : 'ตั้งค่าเชื่อมต่อ',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -342,17 +383,24 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: isLineConnected ? const Color(0xFFF4F9F1) : const Color(0xFFFFF9F2),
+              color: isLineConnected
+                  ? const Color(0xFFF4F9F1)
+                  : const Color(0xFFFFF9F2),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isLineConnected ? const Color(0xFF4C7A3F).withValues(alpha: 0.25) : const Color(0xFFFCD34D),
+                color: isLineConnected
+                    ? const Color(0xFF4C7A3F).withValues(alpha: 0.25)
+                    : const Color(0xFFFCD34D),
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  isLineConnected ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-                  color: isLineConnected ? emeraldTheme : const Color(0xFFD97706),
+                  isLineConnected
+                      ? Icons.check_circle_rounded
+                      : Icons.info_outline_rounded,
+                  color:
+                      isLineConnected ? emeraldTheme : const Color(0xFFD97706),
                   size: 16,
                 ),
                 const SizedBox(width: 8),
@@ -364,7 +412,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: isLineConnected ? const Color(0xFF3E5E33) : const Color(0xFF92400E),
+                      color: isLineConnected
+                          ? const Color(0xFF3E5E33)
+                          : const Color(0xFF92400E),
                     ),
                   ),
                 ),
@@ -379,7 +429,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             dense: true,
             title: const Text(
               'เตือนเมื่อไม่วัดความดันเกิน 24 ชม.',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: primaryTextColor),
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTextColor),
             ),
             value: _notifyBpInactive,
             activeColor: emeraldTheme,
@@ -389,9 +442,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               if (patientId != null) {
                 await Supabase.instance.client
                     .from('patients')
-                    .update({'notify_bp_inactive': val})
-                    .eq('id', patientId);
-                await _profileService.updateLocalProfile({'notify_bp_inactive': val});
+                    .update({'notify_bp_inactive': val}).eq('id', patientId);
+                await _profileService
+                    .updateLocalProfile({'notify_bp_inactive': val});
               }
             },
           ),
@@ -401,7 +454,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   }
 
   // 🔔 2. Pop-up Modal จัดการเชื่อมต่อ LINE พร้อมเลือก คนไข้ VS ญาติ
-  void _showLineConnectionDialog() async { // 👈 เติม async ตรงนี้
+  void _showLineConnectionDialog() async {
+    // 👈 เติม async ตรงนี้
     String selectedRole = _lineRecipientRole;
     final manualIdCtrl = TextEditingController(text: _lineUserId ?? '');
     String pairingCode = (100000 + Random().nextInt(900000)).toString();
@@ -412,19 +466,23 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       await Supabase.instance.client.from('patients').update({
         'line_recipient_role': selectedRole,
         'line_pairing_code': pairingCode,
-        'line_pairing_expires_at': DateTime.now().add(const Duration(minutes: 10)).toUtc().toIso8601String(),
+        'line_pairing_expires_at': DateTime.now()
+            .add(const Duration(minutes: 10))
+            .toUtc()
+            .toIso8601String(),
       }).eq('id', patientId);
     }
 
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           contentPadding: const EdgeInsets.symmetric(horizontal: 20),
           title: Row(
@@ -435,7 +493,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   color: const Color(0xFF06C755).withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.chat_bubble_rounded, color: Color(0xFF06C755), size: 22),
+                child: const Icon(Icons.chat_bubble_rounded,
+                    color: Color(0xFF06C755), size: 22),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -458,7 +517,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 const SizedBox(height: 6),
                 const Text(
                   '1. เลือกผู้รับการแจ้งเตือน:',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: primaryTextColor),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTextColor),
                 ),
                 const SizedBox(height: 10),
 
@@ -467,15 +529,21 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   children: [
                     Expanded(
                       child: InkWell(
-                        onTap: () => setDialogState(() => selectedRole = 'patient'),
+                        onTap: () =>
+                            setDialogState(() => selectedRole = 'patient'),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 8),
                           decoration: BoxDecoration(
-                            color: selectedRole == 'patient' ? const Color(0xFFEAF3E4) : const Color(0xFFFAFAFA),
+                            color: selectedRole == 'patient'
+                                ? const Color(0xFFEAF3E4)
+                                : const Color(0xFFFAFAFA),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: selectedRole == 'patient' ? emeraldTheme : const Color(0xFFEADBCE),
+                              color: selectedRole == 'patient'
+                                  ? emeraldTheme
+                                  : const Color(0xFFEADBCE),
                               width: selectedRole == 'patient' ? 1.5 : 1,
                             ),
                           ),
@@ -483,7 +551,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             children: [
                               Icon(
                                 Icons.person_rounded,
-                                color: selectedRole == 'patient' ? emeraldTheme : secondaryTextColor,
+                                color: selectedRole == 'patient'
+                                    ? emeraldTheme
+                                    : secondaryTextColor,
                                 size: 22,
                               ),
                               const SizedBox(height: 4),
@@ -492,7 +562,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
-                                  color: selectedRole == 'patient' ? const Color(0xFF2E6325) : secondaryTextColor,
+                                  color: selectedRole == 'patient'
+                                      ? const Color(0xFF2E6325)
+                                      : secondaryTextColor,
                                 ),
                               ),
                             ],
@@ -503,15 +575,21 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: InkWell(
-                        onTap: () => setDialogState(() => selectedRole = 'caregiver'),
+                        onTap: () =>
+                            setDialogState(() => selectedRole = 'caregiver'),
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 8),
                           decoration: BoxDecoration(
-                            color: selectedRole == 'caregiver' ? const Color(0xFFFEF3C7) : const Color(0xFFFAFAFA),
+                            color: selectedRole == 'caregiver'
+                                ? const Color(0xFFFEF3C7)
+                                : const Color(0xFFFAFAFA),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: selectedRole == 'caregiver' ? const Color(0xFFD97706) : const Color(0xFFEADBCE),
+                              color: selectedRole == 'caregiver'
+                                  ? const Color(0xFFD97706)
+                                  : const Color(0xFFEADBCE),
                               width: selectedRole == 'caregiver' ? 1.5 : 1,
                             ),
                           ),
@@ -519,7 +597,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             children: [
                               Icon(
                                 Icons.family_restroom_rounded,
-                                color: selectedRole == 'caregiver' ? const Color(0xFFD97706) : secondaryTextColor,
+                                color: selectedRole == 'caregiver'
+                                    ? const Color(0xFFD97706)
+                                    : secondaryTextColor,
                                 size: 22,
                               ),
                               const SizedBox(height: 4),
@@ -528,7 +608,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
-                                  color: selectedRole == 'caregiver' ? const Color(0xFF92400E) : secondaryTextColor,
+                                  color: selectedRole == 'caregiver'
+                                      ? const Color(0xFF92400E)
+                                      : secondaryTextColor,
                                 ),
                               ),
                             ],
@@ -542,7 +624,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
                 const Text(
                   '2. วิธีเชื่อมต่อ LINE OA:',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: primaryTextColor),
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTextColor),
                 ),
                 const SizedBox(height: 10),
 
@@ -561,12 +646,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         selectedRole == 'caregiver'
                             ? 'ให้ญาติเปิด LINE OA แล้วพิมพ์รหัส 6 หลักนี้:'
                             : 'เปิด LINE OA แล้วส่งรหัส 6 หลักนี้ในแชท:',
-                        style: const TextStyle(fontSize: 12, color: secondaryTextColor),
+                        style: const TextStyle(
+                            fontSize: 12, color: secondaryTextColor),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
@@ -597,19 +684,26 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   tilePadding: EdgeInsets.zero,
                   title: const Text(
                     'หรือ ระบุ LINE User ID โดยตรง (ขั้นสูง)',
-                    style: TextStyle(fontSize: 12, color: secondaryTextColor, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: secondaryTextColor,
+                        fontWeight: FontWeight.w600),
                   ),
                   children: [
                     TextField(
                       controller: manualIdCtrl,
-                      style: const TextStyle(fontSize: 13, color: primaryTextColor),
+                      style: const TextStyle(
+                          fontSize: 13, color: primaryTextColor),
                       decoration: InputDecoration(
                         hintText: 'เช่น U1234567890abcdef...',
-                        hintStyle: const TextStyle(color: mutedTextColor, fontSize: 12),
+                        hintStyle: const TextStyle(
+                            color: mutedTextColor, fontSize: 12),
                         filled: true,
                         fillColor: const Color(0xFFFAFAFA),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -625,7 +719,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 Expanded(
                   child: TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text('ปิด', style: TextStyle(color: mutedTextColor)),
+                    child: const Text('ปิด',
+                        style: TextStyle(color: mutedTextColor)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -634,12 +729,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: emeraldTheme,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: () async {
                       final inputId = manualIdCtrl.text.trim();
-                      final patientId = await _profileService.getCurrentPatientId();
+                      final patientId =
+                          await _profileService.getCurrentPatientId();
 
                       if (patientId != null) {
                         final updatePayload = {
@@ -650,7 +747,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                               .toUtc()
                               .toIso8601String(),
                           if (inputId.isNotEmpty) 'line_user_id': inputId,
-                          if (inputId.isNotEmpty) 'line_linked_at': DateTime.now().toUtc().toIso8601String(),
+                          if (inputId.isNotEmpty)
+                            'line_linked_at':
+                                DateTime.now().toUtc().toIso8601String(),
                         };
 
                         await Supabase.instance.client
@@ -669,7 +768,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       if (mounted) Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('บันทึกการตั้งค่าแจ้งเตือนไปยัง [$selectedRole] แล้ว'),
+                          content: Text(
+                              'บันทึกการตั้งค่าแจ้งเตือนไปยัง [$selectedRole] แล้ว'),
                           backgroundColor: emeraldTheme,
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -677,7 +777,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     },
                     child: const Text(
                       'บันทึกการตั้งค่า',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13),
                     ),
                   ),
                 ),
@@ -686,6 +789,123 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSpecificConditionsCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF0E5D8), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.health_and_safety_outlined,
+                  color: earthyBrown, size: 22),
+              SizedBox(width: 8),
+              Text(
+                'ประวัติโรคและภาวะเฉพาะทาง (CDSS Support)',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTextColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'แตะเลือกภาวะที่แพทย์เคยระบุ เพื่อให้ระบบ CDSS แนะนำสูตรยาที่ปลอดภัย:',
+            style: TextStyle(fontSize: 12, color: secondaryTextColor),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildConditionChip('หลอดเลือดหัวใจ (CAD)', _hasCad,
+                  (v) => setState(() => _hasCad = v)),
+              _buildConditionChip(
+                  'หัวใจล้มเหลว (Heart Failure)',
+                  _hasHeartFailure,
+                  (v) => setState(() => _hasHeartFailure = v)),
+              _buildConditionChip('ไตเรื้อรัง/โปรตีนรั่ว', _hasProteinuria,
+                  (v) => setState(() => _hasProteinuria = v)),
+              _buildConditionChip('โรคเกาต์ / กรดยูริกสูง', _hasGout,
+                  (v) => setState(() => _hasGout = v)),
+              _buildConditionChip('นอนกรนรุนแรง (OSA)', _hasOsa,
+                  (v) => setState(() => _hasOsa = v)),
+            ],
+          ),
+          if (_gender == 'หญิง') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: _isPregnant ? const Color(0xFFFDF2F8) : softCardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _isPregnant
+                      ? const Color(0xFFF472B6)
+                      : const Color(0xFFF0E5D8),
+                ),
+              ),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  'อยู่ในช่วงตั้งครรภ์ (Pregnancy)',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: primaryTextColor,
+                      fontSize: 13),
+                ),
+                subtitle: const Text(
+                  'จำเป็นสำหรับการคัดกรองยาความดันที่ปลอดภัยต่อทารก',
+                  style: TextStyle(fontSize: 11, color: secondaryTextColor),
+                ),
+                value: _isPregnant,
+                activeColor: const Color(0xFFDB2777),
+                onChanged: (val) => setState(() => _isPregnant = val),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConditionChip(
+      String label, bool isSelected, ValueChanged<bool> onSelected) {
+    return FilterChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? Colors.white : primaryTextColor,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: emeraldTheme,
+      backgroundColor: softCardBg,
+      showCheckmark: false,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+            color: isSelected ? emeraldTheme : const Color(0xFFEADBCE)),
+      ),
+      onSelected: onSelected,
     );
   }
 
@@ -720,7 +940,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF2C879).withValues(alpha: 0.5), width: 1.2),
+        border: Border.all(
+            color: const Color(0xFFF2C879).withValues(alpha: 0.5), width: 1.2),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -734,7 +955,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.local_fire_department_rounded, color: Color(0xFFD97B4F), size: 24),
+              Icon(Icons.local_fire_department_rounded,
+                  color: Color(0xFFD97B4F), size: 24),
               SizedBox(width: 8),
               Text(
                 'เป้าหมายพลังงานรายวัน (TDEE)',
@@ -760,11 +982,16 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('BMR (เผาผลาญพื้นฐาน)', style: TextStyle(fontSize: 11, color: secondaryTextColor)),
+                      const Text('BMR (เผาผลาญพื้นฐาน)',
+                          style: TextStyle(
+                              fontSize: 11, color: secondaryTextColor)),
                       const SizedBox(height: 4),
                       Text(
                         '${_bmr.toStringAsFixed(0)} kcal',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: primaryTextColor),
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: primaryTextColor),
                       ),
                     ],
                   ),
@@ -782,11 +1009,16 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('TDEE (ใช้พลังงานรวม)', style: TextStyle(fontSize: 11, color: secondaryTextColor)),
+                      const Text('TDEE (ใช้พลังงานรวม)',
+                          style: TextStyle(
+                              fontSize: 11, color: secondaryTextColor)),
                       const SizedBox(height: 4),
                       Text(
                         '${_tdee.toStringAsFixed(0)} kcal',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFD97B4F)),
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFD97B4F)),
                       ),
                     ],
                   ),
@@ -804,12 +1036,16 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.tips_and_updates, color: Color(0xFFB45309), size: 18),
+                const Icon(Icons.tips_and_updates,
+                    color: Color(0xFFB45309), size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'เป้าหมายลดน้ำหนักที่ปลอดภัย: ไม่เกิน ${deficitTarget.toStringAsFixed(0)} kcal/วัน',
-                    style: const TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF92400E),
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -867,7 +1103,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             offset: const Offset(0, 3),
           ),
         ],
-        border: Border.all(color: riskColor.withValues(alpha: 0.35), width: 1.3),
+        border:
+            Border.all(color: riskColor.withValues(alpha: 0.35), width: 1.3),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -883,7 +1120,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: riskColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(Icons.favorite_rounded, color: riskColor, size: 20),
+                    child: Icon(Icons.favorite_rounded,
+                        color: riskColor, size: 20),
                   ),
                   const SizedBox(width: 10),
                   const Text(
@@ -902,7 +1140,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   color: hasLabData ? const Color(0xFFEAF3E4) : softCardBg,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: hasLabData ? const Color(0xFF4C7A3F).withValues(alpha: 0.3) : const Color(0xFFEADBCE),
+                    color: hasLabData
+                        ? const Color(0xFF4C7A3F).withValues(alpha: 0.3)
+                        : const Color(0xFFEADBCE),
                   ),
                 ),
                 child: Text(
@@ -910,7 +1150,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
-                    color: hasLabData ? const Color(0xFF3E5E33) : secondaryTextColor,
+                    color: hasLabData
+                        ? const Color(0xFF3E5E33)
+                        : secondaryTextColor,
                   ),
                 ),
               ),
@@ -924,7 +1166,10 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   style: TextStyle(color: secondaryTextColor, fontSize: 12)),
               Text(
                 riskLevel,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: riskColor),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: riskColor),
               ),
             ],
           ),
@@ -954,7 +1199,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 _buildRiskFactor('ความดันตัวบน', '$_latestSystolic mmHg'),
                 _buildRiskFactor(
                   'ไขมันรวม (TC)',
-                  hasLabData ? '${cholesterol.toStringAsFixed(0)} mg%' : 'ยังไม่มีแล็บ',
+                  hasLabData
+                      ? '${cholesterol.toStringAsFixed(0)} mg%'
+                      : 'ยังไม่มีแล็บ',
                 ),
               ],
             ),
@@ -967,11 +1214,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   Widget _buildRiskFactor(String label, String val) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: 10, color: secondaryTextColor)),
+        Text(label,
+            style: const TextStyle(fontSize: 10, color: secondaryTextColor)),
         const SizedBox(height: 2),
         Text(
           val,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: primaryTextColor),
+          style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: primaryTextColor),
         ),
       ],
     );
@@ -1005,7 +1256,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: primaryTextColor),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -1027,13 +1279,16 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     // 🌟 การ์ดจัดการแจ้งเตือน LINE (Minimal)
                     _buildLineNotificationSettingCard(),
                     const SizedBox(height: 16),
+                    _buildSpecificConditionsCard(), // 👈 วางการ์ดเงื่อนไข 6 มิติ
+                    const SizedBox(height: 16),
 
                     Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFFF0E5D8), width: 1.2),
+                        border: Border.all(
+                            color: const Color(0xFFF0E5D8), width: 1.2),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.03),
@@ -1047,7 +1302,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.badge_outlined, color: earthyBrown, size: 22),
+                              Icon(Icons.badge_outlined,
+                                  color: earthyBrown, size: 22),
                               SizedBox(width: 8),
                               Text(
                                 'ข้อมูลร่างกายและกิจกรรม',
@@ -1060,42 +1316,50 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             ],
                           ),
                           const Divider(height: 24, color: Color(0xFFF5ECE1)),
-
                           Row(
                             children: [
                               Expanded(
                                 child: TextFormField(
                                   controller: _fNameController,
-                                  style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('ชื่อ', Icons.person_outline),
-                                  validator: (v) =>
-                                      v!.trim().isEmpty ? 'กรุณากรอกชื่อ' : null,
+                                  style:
+                                      const TextStyle(color: primaryTextColor),
+                                  decoration: _inputDecoration(
+                                      'ชื่อ', Icons.person_outline),
+                                  validator: (v) => v!.trim().isEmpty
+                                      ? 'กรุณากรอกชื่อ'
+                                      : null,
                                 ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextFormField(
                                   controller: _lNameController,
-                                  style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('นามสกุล', Icons.person),
-                                  validator: (v) =>
-                                      v!.trim().isEmpty ? 'กรุณากรอกนามสกุล' : null,
+                                  style:
+                                      const TextStyle(color: primaryTextColor),
+                                  decoration:
+                                      _inputDecoration('นามสกุล', Icons.person),
+                                  validator: (v) => v!.trim().isEmpty
+                                      ? 'กรุณากรอกนามสกุล'
+                                      : null,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
-
                           Row(
                             children: [
                               Expanded(
                                 child: DropdownButtonFormField<String>(
                                   value: _gender,
-                                  style: const TextStyle(color: primaryTextColor, fontSize: 15),
-                                  decoration: _inputDecoration('เพศกำเนิด', Icons.wc_outlined),
+                                  style: const TextStyle(
+                                      color: primaryTextColor, fontSize: 15),
+                                  decoration: _inputDecoration(
+                                      'เพศกำเนิด', Icons.wc_outlined),
                                   items: const [
-                                    DropdownMenuItem(value: 'ชาย', child: Text('ชาย')),
-                                    DropdownMenuItem(value: 'หญิง', child: Text('หญิง')),
+                                    DropdownMenuItem(
+                                        value: 'ชาย', child: Text('ชาย')),
+                                    DropdownMenuItem(
+                                        value: 'หญิง', child: Text('หญิง')),
                                   ],
                                   onChanged: (val) {
                                     if (val != null) {
@@ -1112,9 +1376,12 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 child: TextFormField(
                                   controller: _ageController,
                                   keyboardType: TextInputType.number,
-                                  style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('อายุ (ปี)', Icons.cake_outlined),
-                                  onChanged: (_) => setState(() => _calculateMetrics()),
+                                  style:
+                                      const TextStyle(color: primaryTextColor),
+                                  decoration: _inputDecoration(
+                                      'อายุ (ปี)', Icons.cake_outlined),
+                                  onChanged: (_) =>
+                                      setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุอายุ' : null,
                                 ),
@@ -1122,16 +1389,20 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-
                           Row(
                             children: [
                               Expanded(
                                 child: TextFormField(
                                   controller: _weightController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('น้ำหนัก (กก.)', Icons.monitor_weight_outlined),
-                                  onChanged: (_) => setState(() => _calculateMetrics()),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  style:
+                                      const TextStyle(color: primaryTextColor),
+                                  decoration: _inputDecoration('น้ำหนัก (กก.)',
+                                      Icons.monitor_weight_outlined),
+                                  onChanged: (_) =>
+                                      setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุน้ำหนัก' : null,
                                 ),
@@ -1140,10 +1411,15 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _heightController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration('ส่วนสูง (ซม.)', Icons.height),
-                                  onChanged: (_) => setState(() => _calculateMetrics()),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                          decimal: true),
+                                  style:
+                                      const TextStyle(color: primaryTextColor),
+                                  decoration: _inputDecoration(
+                                      'ส่วนสูง (ซม.)', Icons.height),
+                                  onChanged: (_) =>
+                                      setState(() => _calculateMetrics()),
                                   validator: (v) =>
                                       v!.trim().isEmpty ? 'ระบุส่วนสูง' : null,
                                 ),
@@ -1153,30 +1429,34 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                 child: TextFormField(
                                   controller: _bmiController,
                                   readOnly: true,
-                                  style: const TextStyle(color: primaryTextColor, fontWeight: FontWeight.bold),
-                                  decoration: _inputDecoration('BMI', Icons.analytics_outlined),
+                                  style: const TextStyle(
+                                      color: primaryTextColor,
+                                      fontWeight: FontWeight.bold),
+                                  decoration: _inputDecoration(
+                                      'BMI', Icons.analytics_outlined),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
-
                           if (double.tryParse(_bmiController.text) != null &&
                               double.parse(_bmiController.text) > 0) ...[
                             BmiBarChart(bmi: double.parse(_bmiController.text)),
                             const SizedBox(height: 16),
                           ],
-
                           DropdownButtonFormField<String>(
                             value: _activityLevel,
                             isExpanded: true,
-                            decoration: _inputDecoration('กิจกรรมและการออกกำลังกาย', Icons.directions_run_rounded),
+                            decoration: _inputDecoration(
+                                'กิจกรรมและการออกกำลังกาย',
+                                Icons.directions_run_rounded),
                             items: _activityOptions.entries.map((e) {
                               return DropdownMenuItem<String>(
                                 value: e.key,
                                 child: Text(
                                   e.value['label'],
-                                  style: const TextStyle(fontSize: 13, color: primaryTextColor),
+                                  style: const TextStyle(
+                                      fontSize: 13, color: primaryTextColor),
                                 ),
                               );
                             }).toList(),
@@ -1190,20 +1470,21 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             },
                           ),
                           const SizedBox(height: 16),
-
                           TextFormField(
                             controller: _diseaseController,
                             style: const TextStyle(color: primaryTextColor),
-                            decoration: _inputDecoration('โรคประจำตัว', Icons.medical_services_outlined),
+                            decoration: _inputDecoration(
+                                'โรคประจำตัว', Icons.medical_services_outlined),
                           ),
                           const SizedBox(height: 16),
-
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
                               color: softCardBg,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFF0E5D8)),
+                              border:
+                                  Border.all(color: const Color(0xFFF0E5D8)),
                             ),
                             child: SwitchListTile(
                               contentPadding: EdgeInsets.zero,
@@ -1221,17 +1502,22 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                     : '✨ ไม่สูบบุหรี่ / เลิกสูบแล้ว',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: _isSmoker ? const Color(0xFFEF4444) : emeraldTheme,
+                                  color: _isSmoker
+                                      ? const Color(0xFFEF4444)
+                                      : emeraldTheme,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               secondary: Icon(
                                 Icons.smoking_rooms,
-                                color: _isSmoker ? const Color(0xFFEF4444) : emeraldTheme,
+                                color: _isSmoker
+                                    ? const Color(0xFFEF4444)
+                                    : emeraldTheme,
                               ),
                               value: _isSmoker,
                               activeColor: const Color(0xFFEF4444),
-                              onChanged: (val) => setState(() => _isSmoker = val),
+                              onChanged: (val) =>
+                                  setState(() => _isSmoker = val),
                             ),
                           ),
                         ],
@@ -1245,12 +1531,14 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: earthyBrown,
                           foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                           elevation: 2,
                         ),
                         onPressed: _isSaving ? null : _saveProfile,
                         child: _isSaving
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
                             : const Text(
                                 'บันทึกข้อมูลและเป้าหมายพลังงาน',
                                 style: TextStyle(

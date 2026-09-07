@@ -55,7 +55,8 @@ class PatientDatabaseService {
     }
 
     // กรณีเป็น URL เก่าที่ขึ้นต้นด้วย http หรือ https ให้ส่งกลับค่าเดิมทันที
-    if (imagePathOrUrl.startsWith('http://') || imagePathOrUrl.startsWith('https://')) {
+    if (imagePathOrUrl.startsWith('http://') ||
+        imagePathOrUrl.startsWith('https://')) {
       return imagePathOrUrl;
     }
 
@@ -87,12 +88,14 @@ class PatientDatabaseService {
           .gte('recorded_at', startOfDayUtc.toIso8601String());
 
       final records = List<dynamic>.from(response);
-      return records.length < 3; // ถ้าวัดไปแล้วน้อยกว่า 3 ครั้ง ถือว่าเซฟได้ (true)
+      return records.length <
+          3; // ถ้าวัดไปแล้วน้อยกว่า 3 ครั้ง ถือว่าเซฟได้ (true)
     } catch (e) {
       debugPrint('⚠️ Error checking daily limit: $e');
       return true; // ถ้าเน็ตหลุดหรือมี Error ยอมให้เซฟไว้ก่อน เพื่อความปลอดภัย
     }
   }
+
   /// 📍 ดึงเวลาที่บันทึกความดันครั้งล่าสุดของผู้ป่วยในวันนี้
   Future<DateTime?> getLastMeasurementTimeToday(String patientId) async {
     try {
@@ -135,7 +138,8 @@ class PatientDatabaseService {
         // 📍 [Fix Timezone]: ใช้ UTC
         'recorded_at': DateTime.now().toUtc().toIso8601String(),
       });
-      debugPrint('✅ บันทึกการแจ้งเตือนวิกฤตลงตาราง alerts_complications เรียบร้อย');
+      debugPrint(
+          '✅ บันทึกการแจ้งเตือนวิกฤตลงตาราง alerts_complications เรียบร้อย');
     } catch (e) {
       debugPrint('❌ เกิดข้อผิดพลาดในการบันทึก alerts_complications: $e');
       rethrow;
@@ -199,9 +203,10 @@ class PatientDatabaseService {
   /// 📍 [เพิ่มใหม่]: ฟังก์ชันสร้าง Signed URL ชั่วคราว (อายุ 1 ชั่วโมง) เมื่อจะดึงรูปไปแสดงบน UI
   Future<String?> getSignedImageUrl(String? imagePathOrUrl) async {
     if (imagePathOrUrl == null || imagePathOrUrl.isEmpty) return null;
-    
+
     // ถ้าเป็น URL แบบเก่าที่มี http/https อยู่แล้ว ให้ใช้ค่านั้นได้เลย (รองรับ Backward Compatibility)
-    if (imagePathOrUrl.startsWith('http://') || imagePathOrUrl.startsWith('https://')) {
+    if (imagePathOrUrl.startsWith('http://') ||
+        imagePathOrUrl.startsWith('https://')) {
       return imagePathOrUrl;
     }
 
@@ -238,12 +243,15 @@ class PatientDatabaseService {
       await _supabase.from('patients').update({
         if (age != null) 'age': age,
         if (gender != null && gender.trim().isNotEmpty) 'gender': gender,
-        if (firstName != null && firstName.trim().isNotEmpty) 'first_name': firstName,
-        if (lastName != null && lastName.trim().isNotEmpty) 'last_name': lastName,
+        if (firstName != null && firstName.trim().isNotEmpty)
+          'first_name': firstName,
+        if (lastName != null && lastName.trim().isNotEmpty)
+          'last_name': lastName,
         if (weight != null) 'weight_kg': weight,
         if (height != null) 'height_cm': height,
         if (bmi != null) 'bmi': bmi,
-        if (underlyingDiseases != null) 'underlying_diseases': underlyingDiseases,
+        if (underlyingDiseases != null)
+          'underlying_diseases': underlyingDiseases,
         if (lifestyleNotes != null) 'lifestyle_notes': lifestyleNotes,
       }).eq('id', patientId);
 
@@ -267,13 +275,16 @@ class PatientDatabaseService {
   // =========================================================================
 
   /// อัปโหลดรูปซองยาลง Bucket medication_images
-  Future<String?> uploadMedicationImage(File imageFile, String patientId) async {
+  Future<String?> uploadMedicationImage(
+      File imageFile, String patientId) async {
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final filePath = '$patientId/$fileName';
 
       // บีบอัดรูปก่อนอัปโหลดเพื่อประหยัดพื้นที่ (ถ้ามีแพ็กเกจ compress, ถ้าไม่มีใช้ไฟล์สด)
-      await _supabase.storage.from('medication_images').upload(filePath, imageFile);
+      await _supabase.storage
+          .from('medication_images')
+          .upload(filePath, imageFile);
       return filePath;
     } catch (e) {
       debugPrint('⚠️ Error uploading medication image: $e');
@@ -322,11 +333,14 @@ class PatientDatabaseService {
   Future<String?> getMedicationImageUrl(String imagePath) async {
     if (imagePath.startsWith('http')) return imagePath;
     try {
-      return await _supabase.storage.from('medication_images').createSignedUrl(imagePath, 60 * 60);
+      return await _supabase.storage
+          .from('medication_images')
+          .createSignedUrl(imagePath, 60 * 60);
     } catch (e) {
       return null;
     }
   }
+
   // 📍 ฟังก์ชันใหม่: บันทึกข้อมูลว่า "กินยาแล้ว" ลงฐานข้อมูล
   Future<void> logMedicationTaken({
     required String patientId,
@@ -383,6 +397,7 @@ class PatientDatabaseService {
       throw Exception('ไม่สามารถลบข้อมูลยาได้: $e');
     }
   }
+
   // 1. ดึงประวัติผลแล็บของผู้ป่วย
   Future<List<Map<String, dynamic>>> getLabResults(String patientId) async {
     try {
@@ -396,8 +411,10 @@ class PatientDatabaseService {
       throw Exception('ไม่สามารถดึงข้อมูลผลแล็บได้: $e');
     }
   }
+
   /// อัปโหลดรูปภาพใบแล็บจาก Memory Bytes (Web / PWA Safe)
-  Future<String?> uploadLabImageBytes(Uint8List imageBytes, String patientId) async {
+  Future<String?> uploadLabImageBytes(
+      Uint8List imageBytes, String patientId) async {
     try {
       if (patientId.isEmpty) return null;
 
@@ -421,57 +438,61 @@ class PatientDatabaseService {
       return null;
     }
   }
-  
+
   // 2. บันทึกผลแล็บใหม่ (รองรับค่า Total Cholesterol สำหรับคำนวณ Thai CV Risk)
   Future<void> saveLabResult({
-  required String patientId,
-  double? totalCholesterol,
-  double? hdl,
-  double? ldl,
-  double? triglyceride,
-  double? fastingBloodSugar,
-  double? hba1c,
-  double? creatinine,
-  double? bun,
-  double? egfr,
-  double? sgpt,
-  double? uricAcid,
-  String? imageUrl,
-}) async {
-  try {
-    final Map<String, dynamic> data = {
-      'patient_id': patientId,
-      'test_date': DateTime.now().toUtc().toIso8601String(),
-    };
+    required String patientId,
+    double? totalCholesterol,
+    double? hdl,
+    double? ldl,
+    double? triglyceride,
+    double? fastingBloodSugar,
+    double? hba1c,
+    double? creatinine,
+    double? bun,
+    double? egfr,
+    double? sgpt,
+    double? uricAcid,
+    double? potassium, // 👈 เพิ่ม K+
+    double? sodium, // 👈 เพิ่ม Na+
+    double? uacr, // 👈 เพิ่ม UACR
+    String? urineProtein, // 👈 เพิ่ม โปรตีนในปัสสาวะ
+    String? imageUrl,
+  }) async {
+    try {
+      final Map<String, dynamic> data = {
+        'patient_id': patientId,
+        'test_date': DateTime.now().toUtc().toIso8601String(),
+      };
 
-    // Helper เช็คค่า > 0
-    void addIfValid(String key, double? val) {
-      if (val != null && val > 0) data[key] = val;
+      // Helper เช็คค่า > 0
+      void addIfValid(String key, double? val) {
+        if (val != null && val > 0) data[key] = val;
+      }
+
+      addIfValid('total_cholesterol', totalCholesterol);
+      addIfValid('hdl', hdl);
+      addIfValid('ldl', ldl);
+      addIfValid('triglyceride', triglyceride);
+      addIfValid('fasting_blood_sugar', fastingBloodSugar);
+      addIfValid('hba1c', hba1c);
+      addIfValid('creatinine', creatinine);
+      addIfValid('bun', bun);
+      addIfValid('egfr', egfr);
+      addIfValid('sgpt', sgpt);
+      addIfValid('uric_acid', uricAcid);
+
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        data['image_url'] = imageUrl;
+      }
+
+      await _supabase.from('lab_results').insert(data);
+      debugPrint('✅ บันทึกผลแล็บลง Supabase สำเร็จ: $data');
+    } catch (e) {
+      debugPrint('❌ Error saveLabResult: $e');
+      rethrow;
     }
-
-    addIfValid('total_cholesterol', totalCholesterol);
-    addIfValid('hdl', hdl);
-    addIfValid('ldl', ldl);
-    addIfValid('triglyceride', triglyceride);
-    addIfValid('fasting_blood_sugar', fastingBloodSugar);
-    addIfValid('hba1c', hba1c);
-    addIfValid('creatinine', creatinine);
-    addIfValid('bun', bun);
-    addIfValid('egfr', egfr);
-    addIfValid('sgpt', sgpt);
-    addIfValid('uric_acid', uricAcid);
-
-    if (imageUrl != null && imageUrl.isNotEmpty) {
-      data['image_url'] = imageUrl;
-    }
-
-    await _supabase.from('lab_results').insert(data);
-    debugPrint('✅ บันทึกผลแล็บลง Supabase สำเร็จ: $data');
-  } catch (e) {
-    debugPrint('❌ Error saveLabResult: $e');
-    rethrow;
   }
-}
   // ==========================================
   // ส่วนที่ 1: จัดการลบและบันทึกออกกำลังกาย
   // ==========================================
@@ -510,7 +531,8 @@ class PatientDatabaseService {
 
       await _supabase.from('exercise_logs').insert({
         'patient_id': patientId,
-        'exercise_name': exerciseName, // 📍 เปลี่ยนจาก exercise_type เป็น exercise_name
+        'exercise_name':
+            exerciseName, // 📍 เปลี่ยนจาก exercise_type เป็น exercise_name
         'duration_minutes': durationMinutes,
         'intensity_zone': intensityZone, // เก็บ Zone (2-5)
         'calories_burned': caloriesBurned,
@@ -520,12 +542,16 @@ class PatientDatabaseService {
       throw Exception('ไม่สามารถบันทึกการออกกำลังกายได้: $e');
     }
   }
+
   /// 🗑️ รีเซ็ตข้อมูลโภชนาการและการออกกำลังกาย 7 วันย้อนหลัง
   Future<void> resetWeeklyLogs(String patientId) async {
     try {
       final now = DateTime.now();
-      final sevenDaysAgo = now.subtract(const Duration(days: 7)).toUtc().toIso8601String();
-      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999).toUtc().toIso8601String();
+      final sevenDaysAgo =
+          now.subtract(const Duration(days: 7)).toUtc().toIso8601String();
+      final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59, 999)
+          .toUtc()
+          .toIso8601String();
 
       // ลบ food_logs 7 วันล่าสุด
       await _supabase

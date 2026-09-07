@@ -160,6 +160,14 @@ class PatientProfileService {
         if (newData.containsKey('age')) updatePayload['age'] = newData['age'];
         if (newData.containsKey('gender'))
           updatePayload['gender'] = newData['gender'];
+        if (newData.containsKey('underlying_diseases')) {
+          updatePayload['underlying_diseases'] = newData['underlying_diseases'];
+        } else if (newData.containsKey('diseases')) {
+          updatePayload['underlying_diseases'] = newData['diseases'];
+        }
+
+        if (newData.containsKey('smokes'))
+          updatePayload['smokes'] = newData['smokes'];
 
         // สัดส่วนร่างกาย
         if (newData.containsKey('weight_kg')) {
@@ -191,6 +199,24 @@ class PatientProfileService {
 
         if (newData.containsKey('smokes'))
           updatePayload['smokes'] = newData['smokes'];
+        // 🌟 เพิ่มการ Sync ตัวแปรสภาวะเฉพาะทาง 6 มิติเข้า Supabase
+        const conditionKeys = [
+          'has_cvd',
+          'has_cad',
+          'has_heart_failure',
+          'has_proteinuria',
+          'has_gout',
+          'has_osa',
+          'is_pregnant',
+          'has_pheo_triad',
+          'home_sbp',
+          'home_dbp',
+        ];
+        for (final key in conditionKeys) {
+          if (newData.containsKey(key)) {
+            updatePayload[key] = newData[key];
+          }
+        }
 
         if (updatePayload.isNotEmpty) {
           await _supabase

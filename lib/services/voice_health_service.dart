@@ -30,7 +30,7 @@ class VoiceHealthService {
 
 [กฎวิกฤต — ต้องตรวจทุกครั้งก่อนตอบ]
 1. SBP >= 180 หรือ DBP >= 110 → has_warning_sign=true, urgency_level=CRISIS ทันที
-2. SBP < 90 หรือ DBP < 60 → urgency_level=WARNING (ความดันต่ำ) และระบุใน warning_details
+2. SBP < 100 หรือ DBP < 60 → urgency_level=WARNING (ความดันต่ำ) และระบุใน warning_details
 3. ถ้าไม่เข้าเงื่อนไขเลย → urgency_level=NORMAL, has_warning_sign=false
 
 [กฎการอ่านภาพ LCD เครื่องวัดความดัน]
@@ -68,7 +68,6 @@ class VoiceHealthService {
   );
 
   VoiceHealthService(this.apiKey) {
-    // กำหนดให้ใช้ Model เดียวกันทั้งบน Mobile และ Web/PWA โดยตรง
     _model = GenerativeModel(
       model: 'gemini-3.7-flash',
       apiKey: apiKey,
@@ -132,7 +131,7 @@ class VoiceHealthService {
     }
   }
 
-  /// 📍 2. อ่านหน้าจอเครื่องวัดความดัน (LCD OCR) — ทำงานตรงเหมือน .apk 100%
+  /// 📍 2. อ่านหน้าจอเครื่องวัดความดัน (LCD OCR)
   Future<Map<String, dynamic>?> processLcdImageInput(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
@@ -159,7 +158,7 @@ class VoiceHealthService {
     }
   }
 
-  /// 📍 3. ฟังก์ชันสกัดข้อมูลใบแล็บ (รองรับ Web & Mobile Direct)
+  /// 📍 3. ฟังก์ชันสกัดข้อมูลใบแล็บ (เพิ่ม potassium และ sodium เพื่อความปลอดภัยของยา)
   Future<Map<String, dynamic>?> processLabReportImage(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
@@ -189,7 +188,9 @@ class VoiceHealthService {
             '  "bun": number หรือ null,\n'
             '  "egfr": number หรือ null,\n'
             '  "sgpt": number หรือ null,\n'
-            '  "uric_acid": number หรือ null\n'
+            '  "uric_acid": number หรือ null,\n'
+            '  "potassium": number หรือ null,\n'
+            '  "sodium": number หรือ null\n'
             '}',
           ),
           DataPart(mimeType, imageBytes),
@@ -210,7 +211,7 @@ class VoiceHealthService {
     }
   }
 
-  /// 📍 4. ฟังก์ชันสกัดข้อมูลฉลากยา (รองรับ Web & Mobile Direct)
+  /// 📍 4. ฟังก์ชันสกัดข้อมูลฉลากยา
   Future<Map<String, dynamic>?> processDrugLabelImage(
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',

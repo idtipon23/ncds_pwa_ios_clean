@@ -122,19 +122,27 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     }
   }
 
-  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก
+  // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก (ขยายรองรับ Electrolytes และ Uric Acid)
   void _showConfirmLabDialog(Map<String, dynamic> labData, Uint8List imageBytes) {
     final double? tcVal = (labData['total_cholesterol'] as num?)?.toDouble();
     final double? hdlVal = (labData['hdl'] as num?)?.toDouble();
     final double? ldlVal = (labData['ldl'] as num?)?.toDouble();
     final double? fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble();
     final double? crVal = (labData['creatinine'] as num?)?.toDouble();
+    final double? egfrVal = (labData['egfr'] as num?)?.toDouble();
+    final double? kVal = (labData['potassium'] as num?)?.toDouble();
+    final double? naVal = (labData['sodium'] as num?)?.toDouble();
+    final double? uaVal = (labData['uric_acid'] as num?)?.toDouble();
 
     final tcCtrl = TextEditingController(text: (tcVal != null && tcVal > 0) ? tcVal.toString() : '');
     final hdlCtrl = TextEditingController(text: (hdlVal != null && hdlVal > 0) ? hdlVal.toString() : '');
     final ldlCtrl = TextEditingController(text: (ldlVal != null && ldlVal > 0) ? ldlVal.toString() : '');
     final fbsCtrl = TextEditingController(text: (fbsVal != null && fbsVal > 0) ? fbsVal.toString() : '');
     final crCtrl = TextEditingController(text: (crVal != null && crVal > 0) ? crVal.toString() : '');
+    final egfrCtrl = TextEditingController(text: (egfrVal != null && egfrVal > 0) ? egfrVal.toString() : '');
+    final kCtrl = TextEditingController(text: (kVal != null && kVal > 0) ? kVal.toString() : '');
+    final naCtrl = TextEditingController(text: (naVal != null && naVal > 0) ? naVal.toString() : '');
+    final uaCtrl = TextEditingController(text: (uaVal != null && uaVal > 0) ? uaVal.toString() : '');
 
     showDialog(
       context: context,
@@ -170,10 +178,12 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'AI ได้ดึงค่าตัวเลขจากใบแล็บ กรุณาตรวจสอบความถูกต้อง',
+                  'AI ได้ดึงค่าตัวเลขจากใบแล็บ กรุณาตรวจสอบหรือแก้ไขค่าให้ถูกต้อง:',
                   style: TextStyle(fontSize: 12, color: secondaryTextColor),
                 ),
                 const SizedBox(height: 14),
+
+                // ไขมันในเลือด
                 TextField(
                   controller: tcCtrl,
                   style: const TextStyle(color: primaryTextColor),
@@ -181,32 +191,98 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: hdlCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('HDL (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: hdlCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('HDL (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: ldlCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('LDL (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: ldlCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('LDL (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+
+                // น้ำตาลและไต
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: fbsCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('FBS น้ำตาล (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: crCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Creatinine ไต (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: fbsCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('Fasting Blood Sugar (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+
+                // เกลือแร่ (Electrolytes สำหรับ CDSS Rules)
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: kCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Potassium K+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: naCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Sodium Na+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: crCtrl,
-                  style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('Creatinine (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+
+                // ยูริกและ eGFR
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: uaCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Uric Acid (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: egfrCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('eGFR (ml/min)'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -231,6 +307,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 ldl: double.tryParse(ldlCtrl.text.trim()),
                 fastingBloodSugar: double.tryParse(fbsCtrl.text.trim()),
                 creatinine: double.tryParse(crCtrl.text.trim()),
+                egfr: double.tryParse(egfrCtrl.text.trim()),
+                potassium: double.tryParse(kCtrl.text.trim()),
+                sodium: double.tryParse(naCtrl.text.trim()),
+                uricAcid: double.tryParse(uaCtrl.text.trim()),
                 imageBytes: imageBytes,
               );
             },
@@ -271,6 +351,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     double? ldl,
     double? fastingBloodSugar,
     double? creatinine,
+    double? egfr,
+    double? potassium,
+    double? sodium,
+    double? uricAcid,
     required Uint8List imageBytes,
   }) async {
     setState(() => _isLoading = true);
@@ -287,13 +371,17 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         ldl: ldl,
         fastingBloodSugar: fastingBloodSugar,
         creatinine: creatinine,
+        egfr: egfr,
+        potassium: potassium,
+        sodium: sodium,
+        uricAcid: uricAcid,
         imageUrl: imagePath,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('บันทึกผลแล็บสำเร็จ! พร้อมนำไปคำนวณ Thai CV Risk'),
+            content: Text('บันทึกผลแล็บสำเร็จ! พร้อมนำไปประมวลผลความเสี่ยงและยา CDSS'),
             backgroundColor: emeraldTheme,
           ),
         );
@@ -368,6 +456,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                         final double? ldlVal = (lab['ldl'] as num?)?.toDouble();
                         final double? fbsVal = (lab['fasting_blood_sugar'] as num?)?.toDouble();
                         final double? crVal = (lab['creatinine'] as num?)?.toDouble();
+                        final double? egfrVal = (lab['egfr'] as num?)?.toDouble();
+                        final double? kVal = (lab['potassium'] as num?)?.toDouble();
+                        final double? naVal = (lab['sodium'] as num?)?.toDouble();
+                        final double? uaVal = (lab['uric_acid'] as num?)?.toDouble();
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 14),
@@ -422,6 +514,22 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                                 if (crVal != null && crVal > 0) ...[
                                   const SizedBox(height: 6),
                                   _buildMetricRow('Creatinine', crVal, 'mg/dL'),
+                                ],
+                                if (egfrVal != null && egfrVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('eGFR', egfrVal, 'ml/min/1.73m²'),
+                                ],
+                                if (kVal != null && kVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('Potassium (K+)', kVal, 'mEq/L'),
+                                ],
+                                if (naVal != null && naVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('Sodium (Na+)', naVal, 'mEq/L'),
+                                ],
+                                if (uaVal != null && uaVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('Uric Acid', uaVal, 'mg/dL'),
                                 ],
                               ],
                             ),

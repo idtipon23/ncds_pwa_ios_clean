@@ -26,7 +26,7 @@ serve(async (req) => {
 
     let result: any = null
 
-    // 📩 รองรับการส่งข้อความตรงจาก Staff Dashboard
+    // 📩 1. รองรับการส่งข้อความตรงจาก Staff Dashboard
     if (action === 'send_custom_message') {
       const { patient_id, to, text, staff_name, send_to_line } = body
 
@@ -48,7 +48,6 @@ serve(async (req) => {
 
       // 2. หากเลือกส่งเข้า LINE และมี line_user_id ให้ยิงข้อความ
       if (send_to_line && to) {
-        // ✨ ตัดข้อความ static ออก เหลือเฉพาะ Emoji สวยๆ หัว-ท้าย
         const formattedMessage = `🩺✨ ${text} 🌱🤍`
         
         result = await pushLineMessage(to, formattedMessage)
@@ -72,7 +71,12 @@ serve(async (req) => {
       })
     } 
     
-    // Automation Alerts เดิม (คงสภาพเดิม 100% ไม่กระทบส่วนอื่น)
+    // 🚨 2. ตรวจจับแจ้งเตือนความดันต่ำ / Over-treatment Alert
+    else if (action === 'check_hypotension_alert') {
+      result = await checkHypotensionAlert(body)
+    }
+
+    // 🕒 3. Automation Alerts เดิม (คงสภาพเดิม 100%)
     else if (action === 'check_dynamic' || action === 'check_medications') {
       result = await checkDynamicMedications()
     } else if (action === 'check_bp_inactivity') {
@@ -99,6 +103,49 @@ serve(async (req) => {
     })
   }
 })
+
+// 🚨 ฟังก์ชันตรวจจับความดันต่ำและแจ้งเตือนผ่าน LINE อัตโนมัติ
+async function checkHypotensionAlert(body: any) {
+  const { patient_id, systolic, diastolic } = body
+
+  const sbp = Number(systolic) || 0
+  const dbp = Number(diastolic) || 0
+
+  // ตรวจสอบเงื่อนไข SBP < 100 หรือ DBP < 60
+  const isHypotension = (sbp > 0 && sbp < 100) || (dbp > 0 && dbp < 60)
+  if (!isHypotension || !patient_id) {
+    return { skipped: true, reason: 'BP is within safe range or missing patient_id' }
+  }
+
+  // ดึงข้อมูล LINE User ID ของคนไข้
+  const { data: patient, error } = await supabaseAdmin
+    .from('patients')
+    .select('id, first_name, line_user_id, line_recipient_role')
+    .eq('id', patient_id)
+    .maybeSingle()
+
+  if (error || !patient || !patient.line_user_id) {
+    return { skipped: true, reason: 'Patient not found or no LINE ID linked' }
+  }
+
+  const isCaregiver = patient.line_recipient_role === 'caregiver'
+  const alertMessage = isCaregiver
+    ? `🚨 [แจ้งเตือนผู้ดูแล] ความดันโลหิตต่ำกว่าเกณฑ์!\n\nคุณ ${patient.first_name || 'ผู้รับบริการ'} มีค่าความดันล่าสุด (${sbp}/${dbp} mmHg) ซึ่งต่ำกว่า 100/60 mmHg\n\nกรุณาช่วยดูแลให้นั่งพัก ดื่มน้ำสะอาด และหากมีอาการหน้ามืด วิงเวียน ให้งดรับประทานยาลดความดันมื้อถัดไปชั่วคราวแล้วรีบติดต่อเจ้าหน้าที่สาธารณสุขนะคะ 🌱`
+    : `🚨 แจ้งเตือนความดันโลหิตต่ำกว่าเกณฑ์: ค่าความดันล่าสุดของท่าน (${sbp}/${dbp} mmHg) ต่ำกว่า 100/60 mmHg กรุณานั่งพัก ดื่มน้ำสะอาด และหากมีอาการหน้ามืด วิงเวียน ให้งดรับประทานยาลดความดันมื้อถัดไปชั่วคราวแล้วรีบติดต่อเจ้าหน้าที่สาธารณสุขค่ะ 🌱`
+
+  console.log(`[Hypotension Alert] Sending to ${patient.first_name} (${patient.line_user_id})`)
+  const pushRes = await pushLineMessage(patient.line_user_id, alertMessage)
+
+  // บันทึกลง clinical_alerts เพื่อให้เจ้าหน้าที่ตรวจสอบย้อนหลัง
+  await supabaseAdmin.from('clinical_alerts').insert({
+    patient_id: patient_id,
+    alert_type: 'OVER_TREATMENT_HYPOTENSION',
+    severity: 'WARNING',
+    status: 'PENDING',
+  })
+
+  return { success: true, sbp, dbp, line_response: pushRes }
+}
 
 // 🕒 1. ระบบตรวจเช็กมื้อยาตามเวลาอิสระระดับนาที (Bangkok Time)
 async function checkDynamicMedications() {
