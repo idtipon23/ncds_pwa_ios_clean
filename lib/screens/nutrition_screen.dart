@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/patient_profile_service.dart';
 import '../services/nutrition_service.dart';
@@ -35,7 +36,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
   String? _patientId;
   String _underlyingDiseases = '';
-  double _bmr = 0.0; // ✅ จุดแก้ที่ 1: เพิ่มตัวแปรสำหรับเก็บค่า BMR จาก Profile
+  double _bmr = 0.0;
   double _tdee = 2000.0;
   double _weightKg = 60.0; 
   int _latestSystolic = 120;
@@ -63,7 +64,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
       if (patientId != null) {
         _patientId = patientId;
-        // ✅ จุดแก้ที่ 2: ดึงค่า bmr จาก Profile เข้า State
         _bmr = (profile?['bmr'] as num?)?.toDouble() ?? 0.0;
         _tdee = (profile?['tdee'] as num?)?.toDouble() ?? 2000.0;
         _weightKg = (profile?['weight_kg'] as num?)?.toDouble() ?? 60.0;
@@ -148,7 +148,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  const Icon(Icons.restaurant_menu, color: terracottaTheme, size: 28),
+                  CustomPaint(
+                    size: const Size(28, 28),
+                    painter: _ForkSpoonVectorPainter(color: terracottaTheme),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -174,7 +177,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.local_fire_department, color: terracottaTheme, size: 36),
+                    CustomPaint(
+                      size: const Size(36, 36),
+                      painter: _FlameVectorPainter(color: terracottaTheme),
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       '${foodData['calories']} kcal',
@@ -218,11 +224,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 22),
-                          SizedBox(width: 8),
-                          Text(
+                          CustomPaint(
+                            size: const Size(22, 22),
+                            painter: _WarningVectorPainter(color: const Color(0xFFDC2626)),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
                             'ข้อควรระวังสำหรับผู้ป่วย',
                             style: TextStyle(
                               color: Color(0xFFDC2626),
@@ -490,19 +499,29 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     const Text('วัดความเหนื่อย (Talk Test)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: primaryTextColor)),
                     const SizedBox(height: 8),
 
-                    ...zones.map((z) => RadioListTile<int>(
-                      value: z['zone'] as int,
+                    RadioGroup<int>(
                       groupValue: selectedZone,
-                      activeColor: z['color'] as Color,
-                      title: Text(z['title'] as String, style: const TextStyle(fontSize: 14, color: primaryTextColor)),
-                      subtitle: Text(
-                        z['subtitle'] as String,
-                        style: TextStyle(fontSize: 12, color: (z['color'] as Color).withValues(alpha: 0.85)),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() => selectedZone = val);
+                        }
+                      },
+                      child: Column(
+                        children: zones
+                            .map((z) => RadioListTile<int>(
+                                  value: z['value'] as int,
+                                  activeColor: z['color'] as Color,
+                                  title: Text(
+                                    z['label'] as String,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: primaryTextColor,
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
                       ),
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) => setModalState(() => selectedZone = val!),
-                    )),
-
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
@@ -576,11 +595,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626)),
-            SizedBox(width: 8),
-            Text('ยืนยันรีเซ็ตข้อมูล 7 วัน', style: TextStyle(fontWeight: FontWeight.bold, color: primaryTextColor)),
+            CustomPaint(
+              size: const Size(22, 22),
+              painter: _WarningVectorPainter(color: const Color(0xFFDC2626)),
+            ),
+            const SizedBox(width: 8),
+            const Text('ยืนยันรีเซ็ตข้อมูล 7 วัน', style: TextStyle(fontWeight: FontWeight.bold, color: primaryTextColor)),
           ],
         ),
         content: const Text(
@@ -652,7 +674,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
       (sum, item) => sum + ((item['calories_burned'] as num?)?.toDouble() ?? 0.0),
     );
 
-    // ✅ จุดแก้ที่ 3: ดึงค่า BMR จาก Profile มาเป็นเป้าหมายพลังงาน (ถ้าไม่มี ให้ Fallback ไปที่ TDEE หรือ 1500)
     final double targetEnergy = _bmr > 0 ? _bmr : (_tdee > 0 ? _tdee : 1500.0);
 
     return Scaffold(
@@ -665,7 +686,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: primaryTextColor),
+          icon: CustomPaint(
+            size: const Size(18, 18),
+            painter: _ArrowBackVectorPainter(color: primaryTextColor),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -676,7 +700,6 @@ class _NutritionScreenState extends State<NutritionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ส่ง targetEnergy ที่ใช้ค่า BMR เข้าสู่ Card พลังงานสุทธิ
                   _buildCalorieBalanceCard(totalFoodCals, totalBurnedCals, targetEnergy),
                   const SizedBox(height: 16),
 
@@ -688,7 +711,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
 
                   _buildSectionHeader(
                     'รายการอาหารวันนี้ (${_todayFoods.length})',
-                    Icons.fastfood_outlined,
+                    NutritionHeaderIconType.food,
                   ),
                   const SizedBox(height: 8),
                   if (_todayFoods.isEmpty)
@@ -712,7 +735,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                             color: const Color(0xFFDC2626),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
+                          child: CustomPaint(
+                            size: const Size(22, 22),
+                            painter: _TrashVectorPainter(color: Colors.white),
+                          ),
                         ),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -735,7 +761,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                 color: terracottaTheme.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.lunch_dining, color: terracottaTheme, size: 22),
+                              child: CustomPaint(
+                                size: const Size(22, 22),
+                                painter: _ForkSpoonVectorPainter(color: terracottaTheme),
+                              ),
                             ),
                             title: Text(
                               f['food_name'] ?? '',
@@ -757,7 +786,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                                  icon: CustomPaint(
+                                    size: const Size(18, 18),
+                                    painter: _TrashVectorPainter(color: const Color(0xFFDC2626)),
+                                  ),
                                   onPressed: () => _deleteLog(true, index),
                                 ),
                               ],
@@ -774,14 +806,22 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     children: [
                       _buildSectionHeader(
                         'การออกกำลังกาย (${_todayExercises.length})',
-                        Icons.directions_run,
+                        NutritionHeaderIconType.exercise,
                       ),
-                      TextButton.icon(
+                      TextButton(
                         onPressed: _showQuickExerciseModal,
-                        icon: const Icon(Icons.add, color: emeraldTheme, size: 18),
-                        label: const Text(
-                          'เพิ่มกิจกรรม',
-                          style: TextStyle(color: emeraldTheme, fontWeight: FontWeight.bold),
+                        child: Row(
+                          children: [
+                            CustomPaint(
+                              size: const Size(14, 14),
+                              painter: _PlusVectorPainter(color: emeraldTheme),
+                            ),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'เพิ่มกิจกรรม',
+                              style: TextStyle(color: emeraldTheme, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -812,7 +852,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                             color: const Color(0xFFDC2626),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
+                          child: CustomPaint(
+                            size: const Size(22, 22),
+                            painter: _TrashVectorPainter(color: Colors.white),
+                          ),
                         ),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -835,7 +878,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                 color: Colors.blue.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.fitness_center, color: Colors.blue, size: 22),
+                              child: CustomPaint(
+                                size: const Size(22, 22),
+                                painter: _DumbbellVectorPainter(color: Colors.blue),
+                              ),
                             ),
                             title: Text(
                               '$exName$zoneText',
@@ -857,7 +903,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                                   ),
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                                  icon: CustomPaint(
+                                    size: const Size(18, 18),
+                                    painter: _TrashVectorPainter(color: const Color(0xFFDC2626)),
+                                  ),
                                   onPressed: () => _deleteLog(false, index),
                                 ),
                               ],
@@ -893,10 +942,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'บันทึกอาหาร & AI วิเคราะห์',
                 style: TextStyle(
                   fontSize: 16,
@@ -904,7 +953,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   color: primaryTextColor,
                 ),
               ),
-              Icon(Icons.auto_awesome, color: terracottaTheme),
+              CustomPaint(
+                size: const Size(20, 20),
+                painter: _SparkleVectorPainter(color: terracottaTheme),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -912,7 +964,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   onPressed: _isAnalyzing
                       ? null
                       : () => _pickAndAnalyzeFoodImage(ImageSource.camera),
@@ -922,16 +974,25 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     backgroundColor: terracottaTheme.withValues(alpha: 0.05),
                   ),
-                  icon: const Icon(Icons.camera_alt_rounded, color: terracottaTheme),
-                  label: const Text(
-                    'ถ่ายรูปอาหาร',
-                    style: TextStyle(color: terracottaTheme, fontWeight: FontWeight.bold),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(18, 18),
+                        painter: _CameraVectorPainter(color: terracottaTheme),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'ถ่ายรูปอาหาร',
+                        style: TextStyle(color: terracottaTheme, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: OutlinedButton.icon(
+                child: OutlinedButton(
                   onPressed: _isAnalyzing
                       ? null
                       : () => _pickAndAnalyzeFoodImage(ImageSource.gallery),
@@ -941,10 +1002,19 @@ class _NutritionScreenState extends State<NutritionScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     backgroundColor: softCardBg,
                   ),
-                  icon: const Icon(Icons.photo_library_rounded, color: secondaryTextColor),
-                  label: const Text(
-                    'เลือกจากคลัง',
-                    style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.w600),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(18, 18),
+                        painter: _GalleryVectorPainter(color: secondaryTextColor),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'เลือกจากคลัง',
+                        style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -973,7 +1043,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
               ),
               filled: true,
               fillColor: const Color(0xFFFAFAFA),
-              prefixIcon: const Icon(Icons.restaurant, color: terracottaTheme),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.all(12),
+                child: CustomPaint(
+                  size: const Size(18, 18),
+                  painter: _ForkSpoonVectorPainter(color: terracottaTheme),
+                ),
+              ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             ),
           ),
@@ -982,7 +1058,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: ElevatedButton.icon(
+            child: ElevatedButton(
               onPressed: _isAnalyzing ? null : _analyzeAndLogFoodFromText,
               style: ElevatedButton.styleFrom(
                 backgroundColor: terracottaTheme,
@@ -990,16 +1066,26 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 1,
               ),
-              icon: _isAnalyzing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_isAnalyzing)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
-                  : const Icon(Icons.send_rounded),
-              label: Text(
-                _isAnalyzing ? 'AI กำลังวิเคราะห์ภาพ/ข้อความ...' : 'วิเคราะห์จากข้อความ',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  else
+                    CustomPaint(
+                      size: const Size(18, 18),
+                      painter: _SendVectorPainter(color: Colors.white),
+                    ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _isAnalyzing ? 'AI กำลังวิเคราะห์ภาพ/ข้อความ...' : 'วิเคราะห์จากข้อความ',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1138,9 +1224,11 @@ class _NutritionScreenState extends State<NutritionScreen> {
     Color borderColor = isHighBp
         ? const Color(0xFFFCA5A5)
         : (isLowBp ? const Color(0xFFFCD34D) : const Color(0xFFBCE3AA));
-    IconData icon = isHighBp
-        ? Icons.warning_rounded
-        : (isLowBp ? Icons.info_outline : Icons.check_circle_outline);
+
+    GuardIconType guardType = isHighBp
+        ? GuardIconType.warning
+        : (isLowBp ? GuardIconType.info : GuardIconType.check);
+
     Color iconColor =
         isHighBp ? const Color(0xFFDC2626) : (isLowBp ? const Color(0xFFD97706) : emeraldTheme);
 
@@ -1166,7 +1254,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 24),
+          CustomPaint(
+            size: const Size(24, 24),
+            painter: _GuardStatusVectorPainter(type: guardType, color: iconColor),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1183,10 +1274,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, NutritionHeaderIconType iconType) {
     return Row(
       children: [
-        Icon(icon, color: terracottaTheme, size: 20),
+        CustomPaint(
+          size: const Size(20, 20),
+          painter: _SectionHeaderVectorPainter(type: iconType, color: terracottaTheme),
+        ),
         const SizedBox(width: 8),
         Text(
           title,
@@ -1223,11 +1317,14 @@ class _NutritionScreenState extends State<NutritionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.donut_large, color: terracottaTheme, size: 22),
-              SizedBox(width: 8),
-              Text(
+              CustomPaint(
+                size: const Size(22, 22),
+                painter: _DonutMiniIconPainter(color: terracottaTheme),
+              ),
+              const SizedBox(width: 8),
+              const Text(
                 'สัดส่วนสารอาหารและภาพรวม 7 วัน',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: primaryTextColor),
               ),
@@ -1284,17 +1381,26 @@ class _NutritionScreenState extends State<NutritionScreen> {
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
-            child: OutlinedButton.icon(
+            child: OutlinedButton(
               onPressed: () => _showResetWeeklyDialog(context),
-              icon: const Icon(Icons.refresh_rounded, color: Color(0xFFDC2626), size: 18),
-              label: const Text(
-                'รีเซ็ตข้อมูลทดลอง 7 วัน',
-                style: TextStyle(color: Color(0xFFDC2626), fontSize: 14, fontWeight: FontWeight.bold),
-              ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFFDC2626), width: 1.2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CustomPaint(
+                    size: const Size(18, 18),
+                    painter: _ResetVectorPainter(color: const Color(0xFFDC2626)),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'รีเซ็ตข้อมูลทดลอง 7 วัน',
+                    style: TextStyle(color: Color(0xFFDC2626), fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1325,6 +1431,534 @@ class _NutritionScreenState extends State<NutritionScreen> {
       ],
     );
   }
+}
+
+// =========================================================================
+// 🎨 Pure Canvas Vector Painters (100% Canvas Vector - No Icon Font Needed)
+// =========================================================================
+
+enum NutritionHeaderIconType {
+  food,
+  exercise,
+}
+
+enum GuardIconType {
+  warning,
+  info,
+  check,
+}
+
+class _ArrowBackVectorPainter extends CustomPainter {
+  final Color color;
+  _ArrowBackVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path()
+      ..moveTo(w * 0.65, h * 0.15)
+      ..lineTo(w * 0.30, h * 0.50)
+      ..lineTo(w * 0.65, h * 0.85);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ArrowBackVectorPainter old) => old.color != color;
+}
+
+class _ForkSpoonVectorPainter extends CustomPainter {
+  final Color color;
+  _ForkSpoonVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    // ส้อม (ซ้าย)
+    final fork = Path()
+      ..moveTo(w * 0.22, h * 0.15)
+      ..lineTo(w * 0.22, h * 0.45)
+      ..cubicTo(w * 0.22, h * 0.55, w * 0.38, h * 0.55, w * 0.38, h * 0.45)
+      ..lineTo(w * 0.38, h * 0.15)
+      ..moveTo(w * 0.30, h * 0.15)
+      ..lineTo(w * 0.30, h * 0.48)
+      ..moveTo(w * 0.30, h * 0.55)
+      ..lineTo(w * 0.30, h * 0.88);
+    canvas.drawPath(fork, stroke);
+
+    // ช้อน (ขวา)
+    final spoon = Path()
+      ..addOval(Rect.fromLTWH(w * 0.58, h * 0.15, w * 0.24, h * 0.38))
+      ..moveTo(w * 0.70, h * 0.53)
+      ..lineTo(w * 0.70, h * 0.88);
+    canvas.drawPath(spoon, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ForkSpoonVectorPainter old) => old.color != color;
+}
+
+class _FlameVectorPainter extends CustomPainter {
+  final Color color;
+  _FlameVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final fill = Paint()..color = color;
+
+    final path = Path()
+      ..moveTo(w * 0.50, h * 0.05)
+      ..cubicTo(w * 0.65, h * 0.25, w * 0.85, h * 0.45, w * 0.85, h * 0.68)
+      ..cubicTo(w * 0.85, h * 0.88, w * 0.70, h * 0.95, w * 0.50, h * 0.95)
+      ..cubicTo(w * 0.30, h * 0.95, w * 0.15, h * 0.88, w * 0.15, h * 0.68)
+      ..cubicTo(w * 0.15, h * 0.48, w * 0.32, h * 0.30, w * 0.42, h * 0.20)
+      ..cubicTo(w * 0.40, h * 0.38, w * 0.52, h * 0.48, w * 0.58, h * 0.38)
+      ..close();
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlameVectorPainter old) => old.color != color;
+}
+
+class _WarningVectorPainter extends CustomPainter {
+  final Color color;
+  _WarningVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path()
+      ..moveTo(w * 0.50, h * 0.12)
+      ..lineTo(w * 0.88, h * 0.82)
+      ..lineTo(w * 0.12, h * 0.82)
+      ..close();
+    canvas.drawPath(path, stroke);
+
+    final fill = Paint()..color = color;
+    canvas.drawRect(Rect.fromLTWH(w * 0.46, h * 0.38, w * 0.08, h * 0.22), fill);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.70), w * 0.04, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WarningVectorPainter old) => old.color != color;
+}
+
+class _TrashVectorPainter extends CustomPainter {
+  final Color color;
+  _TrashVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    // ฝาถัง
+    canvas.drawLine(Offset(w * 0.18, h * 0.28), Offset(w * 0.82, h * 0.28), stroke);
+    final handle = Path()
+      ..moveTo(w * 0.38, h * 0.28)
+      ..lineTo(w * 0.38, h * 0.16)
+      ..lineTo(w * 0.62, h * 0.16)
+      ..lineTo(w * 0.62, h * 0.28);
+    canvas.drawPath(handle, stroke);
+
+    // ตัวถัง
+    final body = Path()
+      ..moveTo(w * 0.25, h * 0.28)
+      ..lineTo(w * 0.30, h * 0.86)
+      ..lineTo(w * 0.70, h * 0.86)
+      ..lineTo(w * 0.75, h * 0.28);
+    canvas.drawPath(body, stroke);
+
+    // ขีดแนวตั้ง 2 ขีด
+    canvas.drawLine(Offset(w * 0.42, h * 0.40), Offset(w * 0.42, h * 0.74), stroke);
+    canvas.drawLine(Offset(w * 0.58, h * 0.40), Offset(w * 0.58, h * 0.74), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrashVectorPainter old) => old.color != color;
+}
+
+class _PlusVectorPainter extends CustomPainter {
+  final Color color;
+  _PlusVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawLine(Offset(w / 2, h * 0.15), Offset(w / 2, h * 0.85), paint);
+    canvas.drawLine(Offset(w * 0.15, h / 2), Offset(w * 0.85, h / 2), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlusVectorPainter old) => old.color != color;
+}
+
+class _DumbbellVectorPainter extends CustomPainter {
+  final Color color;
+  _DumbbellVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
+
+    // แกนจับ
+    canvas.drawLine(Offset(w * 0.30, h * 0.50), Offset(w * 0.70, h * 0.50), stroke);
+
+    // ตุ้มซ้าย
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.20, h * 0.25, w * 0.10, h * 0.50), const Radius.circular(2)),
+      paint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.12, h * 0.32, w * 0.08, h * 0.36), const Radius.circular(2)),
+      paint,
+    );
+
+    // ตุ้มขวา
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.70, h * 0.25, w * 0.10, h * 0.50), const Radius.circular(2)),
+      paint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(w * 0.80, h * 0.32, w * 0.08, h * 0.36), const Radius.circular(2)),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _DumbbellVectorPainter old) => old.color != color;
+}
+
+class _SparkleVectorPainter extends CustomPainter {
+  final Color color;
+  _SparkleVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final fill = Paint()..color = color;
+
+    final path = Path()
+      ..moveTo(w * 0.50, h * 0.10)
+      ..cubicTo(w * 0.50, h * 0.35, w * 0.65, h * 0.50, w * 0.90, h * 0.50)
+      ..cubicTo(w * 0.65, h * 0.50, w * 0.50, h * 0.65, w * 0.50, h * 0.90)
+      ..cubicTo(w * 0.50, h * 0.65, w * 0.35, h * 0.50, w * 0.10, h * 0.50)
+      ..cubicTo(w * 0.35, h * 0.50, w * 0.50, h * 0.35, w * 0.50, h * 0.10)
+      ..close();
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparkleVectorPainter old) => old.color != color;
+}
+
+class _CameraVectorPainter extends CustomPainter {
+  final Color color;
+  _CameraVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.12, h * 0.28, w * 0.76, h * 0.58),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(body, stroke);
+
+    final topPart = Path()
+      ..moveTo(w * 0.34, h * 0.28)
+      ..lineTo(w * 0.40, h * 0.16)
+      ..lineTo(w * 0.60, h * 0.16)
+      ..lineTo(w * 0.66, h * 0.28);
+    canvas.drawPath(topPart, stroke);
+
+    canvas.drawCircle(Offset(w * 0.50, h * 0.57), w * 0.18, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CameraVectorPainter old) => old.color != color;
+}
+
+class _GalleryVectorPainter extends CustomPainter {
+  final Color color;
+  _GalleryVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    final frame = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.12, h * 0.16, w * 0.76, h * 0.68),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(frame, stroke);
+
+    final fill = Paint()..color = color;
+    canvas.drawCircle(Offset(w * 0.32, h * 0.36), w * 0.08, fill);
+
+    final mountain = Path()
+      ..moveTo(w * 0.18, h * 0.76)
+      ..lineTo(w * 0.42, h * 0.52)
+      ..lineTo(w * 0.58, h * 0.66)
+      ..lineTo(w * 0.72, h * 0.48)
+      ..lineTo(w * 0.82, h * 0.76);
+    canvas.drawPath(mountain, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _GalleryVectorPainter old) => old.color != color;
+}
+
+class _SendVectorPainter extends CustomPainter {
+  final Color color;
+  _SendVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final fill = Paint()..color = color;
+
+    final path = Path()
+      ..moveTo(w * 0.12, h * 0.15)
+      ..lineTo(w * 0.90, h * 0.50)
+      ..lineTo(w * 0.12, h * 0.85)
+      ..lineTo(w * 0.28, h * 0.50)
+      ..close();
+    canvas.drawPath(path, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SendVectorPainter old) => old.color != color;
+}
+
+class _GuardStatusVectorPainter extends CustomPainter {
+  final GuardIconType type;
+  final Color color;
+
+  _GuardStatusVectorPainter({required this.type, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    final fill = Paint()..color = color;
+
+    switch (type) {
+      case GuardIconType.warning:
+        final path = Path()
+          ..moveTo(w * 0.50, h * 0.12)
+          ..lineTo(w * 0.90, h * 0.85)
+          ..lineTo(w * 0.10, h * 0.85)
+          ..close();
+        canvas.drawPath(path, stroke);
+        canvas.drawRect(Rect.fromLTWH(w * 0.46, h * 0.38, w * 0.08, h * 0.24), fill);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.72), w * 0.045, fill);
+        break;
+
+      case GuardIconType.info:
+        canvas.drawCircle(Offset(w / 2, h / 2), w * 0.42, stroke);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.32), w * 0.06, fill);
+        canvas.drawRect(Rect.fromLTWH(w * 0.44, h * 0.45, w * 0.12, h * 0.28), fill);
+        break;
+
+      case GuardIconType.check:
+        canvas.drawCircle(Offset(w / 2, h / 2), w * 0.42, stroke);
+        final check = Path()
+          ..moveTo(w * 0.30, h * 0.50)
+          ..lineTo(w * 0.45, h * 0.66)
+          ..lineTo(w * 0.72, h * 0.36);
+        canvas.drawPath(check, stroke);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GuardStatusVectorPainter old) =>
+      old.type != type || old.color != color;
+}
+
+class _SectionHeaderVectorPainter extends CustomPainter {
+  final NutritionHeaderIconType type;
+  final Color color;
+
+  _SectionHeaderVectorPainter({required this.type, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+
+    if (type == NutritionHeaderIconType.food) {
+      // แฮมเบอร์เกอร์ / จานอาหาร
+      canvas.drawArc(Rect.fromLTWH(w * 0.15, h * 0.20, w * 0.70, h * 0.35), math.pi, math.pi, false, stroke);
+      canvas.drawLine(Offset(w * 0.15, h * 0.55), Offset(w * 0.85, h * 0.55), stroke);
+      canvas.drawLine(Offset(w * 0.20, h * 0.68), Offset(w * 0.80, h * 0.68), stroke);
+      final bottomBun = RRect.fromRectAndRadius(
+        Rect.fromLTWH(w * 0.18, h * 0.72, w * 0.64, h * 0.16),
+        const Radius.circular(3),
+      );
+      canvas.drawRRect(bottomBun, stroke);
+    } else {
+      // คนวิ่ง
+      canvas.drawCircle(Offset(w * 0.62, h * 0.20), w * 0.12, stroke);
+      final runner = Path()
+        ..moveTo(w * 0.55, h * 0.35)
+        ..lineTo(w * 0.45, h * 0.52)
+        ..lineTo(w * 0.65, h * 0.65)
+        ..lineTo(w * 0.75, h * 0.85)
+        ..moveTo(w * 0.45, h * 0.52)
+        ..lineTo(w * 0.30, h * 0.68)
+        ..lineTo(w * 0.22, h * 0.85)
+        ..moveTo(w * 0.52, h * 0.40)
+        ..lineTo(w * 0.35, h * 0.36)
+        ..moveTo(w * 0.52, h * 0.40)
+        ..lineTo(w * 0.68, h * 0.48);
+      canvas.drawPath(runner, stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SectionHeaderVectorPainter old) =>
+      old.type != type || old.color != color;
+}
+
+class _DonutMiniIconPainter extends CustomPainter {
+  final Color color;
+  _DonutMiniIconPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5;
+
+    canvas.drawCircle(Offset(w / 2, h / 2), w * 0.36, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DonutMiniIconPainter old) => old.color != color;
+}
+
+class _ResetVectorPainter extends CustomPainter {
+  final Color color;
+  _ResetVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(w / 2, h / 2), width: w * 0.70, height: h * 0.70),
+      -math.pi / 2,
+      1.6 * math.pi,
+      false,
+      stroke,
+    );
+
+    final arrow = Path()
+      ..moveTo(w * 0.40, h * 0.05)
+      ..lineTo(w * 0.55, h * 0.15)
+      ..lineTo(w * 0.40, h * 0.25);
+    canvas.drawPath(arrow, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ResetVectorPainter old) => old.color != color;
 }
 
 class _DonutChartPainter extends CustomPainter {
@@ -1358,19 +1992,19 @@ class _DonutChartPainter extends CustomPainter {
       return;
     }
 
-    double startAngle = -3.141592653589793 / 2;
+    double startAngle = -math.pi / 2;
 
-    final sweepProtein = (protein / total) * 2 * 3.141592653589793;
+    final sweepProtein = (protein / total) * 2 * math.pi;
     paint.color = Colors.blue;
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius - strokeWidth / 2), startAngle, sweepProtein, false, paint);
     startAngle += sweepProtein;
 
-    final sweepCarbs = (carbs / total) * 2 * 3.141592653589793;
+    final sweepCarbs = (carbs / total) * 2 * math.pi;
     paint.color = Colors.orange;
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius - strokeWidth / 2), startAngle, sweepCarbs, false, paint);
     startAngle += sweepCarbs;
 
-    final sweepFat = (fat / total) * 2 * 3.141592653589793;
+    final sweepFat = (fat / total) * 2 * math.pi;
     paint.color = Colors.redAccent;
     canvas.drawArc(Rect.fromCircle(center: center, radius: radius - strokeWidth / 2), startAngle, sweepFat, false, paint);
   }

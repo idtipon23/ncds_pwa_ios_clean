@@ -32,7 +32,7 @@ Future<void> main() async {
   try {
     await Supabase.initialize(
       url: dotenv.env['SUPABASE_URL'] ?? '',
-      anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+      publishableKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
     ).timeout(const Duration(seconds: 15));
     supabaseReady = true;
   } catch (e) {
@@ -86,7 +86,6 @@ class _MyAppState extends State<MyApp> {
   // 🎨 Palette สีหลักตาม Design System
   static const Color creamBgColor = Color(0xFFFFF8F0);
   static const Color primaryTextColor = Color(0xFF4A3833);
-  static const Color secondaryTextColor = Color(0xFF8A7568);
   static const Color emeraldTheme = Color(0xFF2F9E82);
 
   @override

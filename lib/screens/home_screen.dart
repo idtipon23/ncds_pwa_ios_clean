@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/patient_profile_service.dart';
@@ -9,8 +10,6 @@ import 'patient_profile_screen.dart';
 import 'medication_history_screen.dart';
 import 'nutrition_screen.dart';
 import 'ht_consult_screen.dart';
-import '../services/auth_service.dart';
-import 'login_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,8 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, dynamic>? _profileData;
   List<Map<String, dynamic>> _todayFoodLogs = [];
-  Map<String, dynamic>? _upcomingAppointment; // 📅 ข้อมูลวันนัดหมายถัดไป
-  Map<String, dynamic>? _nextAppointment;
+  Map<String, dynamic>? _upcomingAppointment;
 
   @override
   void initState() {
@@ -57,8 +55,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      // 🚀 timeout ทุก query กัน UI ค้างถาวรถ้า request ไม่ error แต่ก็ไม่ตอบกลับ
-      // (พบได้บน iOS standalone WKWebView เมื่อเพิ่มไอคอนไว้หน้าจอหลัก)
       final patientId = await _profileService
           .getCurrentPatientId()
           .timeout(const Duration(seconds: 8));
@@ -102,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
           debugPrint('⚠️ Error/timeout loading today food logs: $e');
         }
 
-        // 3. 📅 ดึงวันนัดหมายถัดไปที่ยังไม่ถึงกำหนด (นับตั้งแต่วันนี้เป็นต้นไป)
+        // 3. ดึงวันนัดหมายถัดไป
         try {
           final todayStr = DateTime.now().toIso8601String().split('T').first;
           final apptRes = await _supabase
@@ -122,27 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
         } catch (e) {
           debugPrint('⚠️ Error/timeout loading appointment: $e');
         }
-        // 4. ดึงวันนัดหมายถัดไป (นัดที่ยังไม่ถึง และสถานะ scheduled)
-        try {
-          final todayStr = DateTime.now().toIso8601String().split('T').first;
-          final appts = await Supabase.instance.client
-              .from('appointments')
-              .select()
-              .eq('patient_id', patientId)
-              .eq('status', 'scheduled')
-              .gte('appointment_date', todayStr)
-              .order('appointment_date', ascending: true)
-              .limit(1);
 
-          if (appts.isNotEmpty) {
-            _nextAppointment = appts.first;
-          } else {
-            _nextAppointment = null;
-          }
-        } catch (e) {
-          debugPrint('Error loading appointment: $e');
-          _nextAppointment = null;
-        }
       }
     } catch (e) {
       debugPrint('⚠️ Error/timeout loading dashboard: $e');
@@ -159,11 +135,14 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (BuildContext ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.shield_outlined, color: Color(0xFFD97B4F), size: 28),
-            SizedBox(width: 10),
-            Expanded(
+            CustomPaint(
+              size: const Size(26, 26),
+              painter: _ShieldCrossPainter(color: const Color(0xFFD97B4F)),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
               child: Text(
                 'ข้อกำหนดทางการแพทย์',
                 style: TextStyle(
@@ -187,11 +166,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFFCD34D)),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 22),
-                    SizedBox(width: 8),
-                    Expanded(
+                    CustomPaint(
+                      size: const Size(20, 20),
+                      painter: _InfoCirclePainter(color: const Color(0xFFB45309)),
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
                       child: Text(
                         'แอปพลิเคชันนี้ไม่ใช่เครื่องมือแพทย์',
                         style: TextStyle(
@@ -271,7 +253,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return '$weekdayที่ $day $month $year';
   }
- 
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildHeaderSection(),
                           const SizedBox(height: 16),
 
-                          // 📅 แบนเนอร์แสดงวันนัดหมายถัดไป (ถ้ามีนัดในระบบ)
+                          // 📅 แบนเนอร์แสดงวันนัดหมายถัดไป
                           if (_upcomingAppointment != null) ...[
                             _buildAppointmentBanner(),
                             const SizedBox(height: 14),
@@ -317,7 +298,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           // 🌱 แบนเนอร์ต้นไม้สุขภาพ
                           _buildHealthTreeBanner(),
                           const SizedBox(height: 18),
-
 
                           // 📊 การ์ดสรุปความดัน 7 วันล่าสุด
                           _buildHealthIndicatorCard(),
@@ -346,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'บันทึกความดัน',
                                 subtitle: 'พิมพ์ค่าความดัน / ถ่ายรูปจอ LCD',
                                 imagePath: 'assets/images/menu_bp.jpg',
-                                icon: Icons.monitor_heart_rounded,
+                                iconType: MenuIconType.bloodPressure,
                                 barColor: const Color(0xFF2F9E82),
                                 onTap: () => Navigator.push(
                                   context,
@@ -359,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ห้องยาประจำตัว',
                                 subtitle: 'สแกนฉลากยา & ตั้งเตือนทานยา',
                                 imagePath: 'assets/images/menu_drug.jpg',
-                                icon: Icons.medication_rounded,
+                                iconType: MenuIconType.medication,
                                 barColor: const Color(0xFFE8A33D),
                                 onTap: () => Navigator.push(
                                   context,
@@ -372,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'อาหาร & กิจกรรม',
                                 subtitle: 'พิมพ์บันทึกอาหาร / ถ่ายรูปมื้ออาหาร',
                                 imagePath: 'assets/images/menu_fd.jpg',
-                                icon: Icons.restaurant_menu_rounded,
+                                iconType: MenuIconType.nutrition,
                                 barColor: const Color(0xFFD97B4F),
                                 onTap: () => Navigator.push(
                                   context,
@@ -385,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ปรึกษาหมอ AI',
                                 subtitle: 'ถามตอบอิง HT Guideline 2567',
                                 imagePath: 'assets/images/menu_ai.jpg',
-                                icon: Icons.chat_bubble_rounded,
+                                iconType: MenuIconType.aiDoctor,
                                 barColor: const Color(0xFF4C8FA6),
                                 onTap: () => Navigator.push(
                                   context,
@@ -398,7 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'สมุดสุขภาพ',
                                 subtitle: 'ดูกราฟ 7 วัน & ประวัติความเสี่ยง',
                                 imagePath: 'assets/images/menu_graph.jpg',
-                                icon: Icons.bar_chart_rounded,
+                                iconType: MenuIconType.healthBook,
                                 barColor: const Color(0xFF6B9E5C),
                                 onTap: () => Navigator.push(
                                   context,
@@ -411,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 title: 'ข้อมูลของฉัน',
                                 subtitle: 'คำนวณ TDEE & คัดกรองโรค',
                                 imagePath: 'assets/images/menu_risk.jpg',
-                                icon: Icons.person_pin_rounded,
+                                iconType: MenuIconType.profile,
                                 barColor: const Color(0xFFB37B57),
                                 onTap: () => Navigator.push(
                                   context,
@@ -435,7 +415,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // 📅 Widget การ์ดวันนัดหมายถัดไป (Appointment Banner)
   Widget _buildAppointmentBanner() {
-    // 🟢 กรณีที่ 1: ยังไม่มีนัดหมายในระบบ (แสดงแถบสแตนด์บายรอ ไม่ซ่อน UI)
     if (_upcomingAppointment == null) {
       return Container(
         width: double.infinity,
@@ -463,10 +442,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: softCardBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.event_available_rounded,
-                color: secondaryTextColor,
-                size: 22,
+              child: CustomPaint(
+                size: const Size(20, 20),
+                painter: _CalendarVectorPainter(color: secondaryTextColor),
               ),
             ),
             const SizedBox(width: 10),
@@ -499,14 +477,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // 🔵 กรณีที่ 2: มีนัดหมายจริง (ทำงานตามโค้ดเดิมของคุณทั้งหมด)
     final rawDate = _upcomingAppointment!['appointment_date']?.toString() ?? '';
     final timeStr = _upcomingAppointment!['appointment_time']?.toString().substring(0, 5) ?? '09:00';
     final clinic = _upcomingAppointment!['clinic_name']?.toString() ?? 'คลินิก NCDs';
     final reason = _upcomingAppointment!['reason']?.toString() ?? 'ตรวจติดตามอาการ';
     final bool needFasting = _upcomingAppointment!['need_fasting'] == true;
 
-    // คำนวณจำนวนวันที่เหลือนับถอยหลัง
     int daysLeft = 0;
     try {
       final apptDate = DateTime.parse(rawDate);
@@ -553,7 +529,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: badgeColor.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.calendar_month_rounded, color: badgeColor, size: 22),
+                child: CustomPaint(
+                  size: const Size(20, 20),
+                  painter: _CalendarVectorPainter(color: badgeColor),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -630,7 +609,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 🕒 Widget ส่วน Header + Badge เครดิตชื่อผู้พัฒนาที่มุมบนขวา
+  // 🕒 Widget ส่วน Header
   Widget _buildHeaderSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,12 +627,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   width: 1,
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.verified_user_rounded, color: emeraldTheme, size: 14),
-                  SizedBox(width: 6),
-                  Text(
+                  CustomPaint(
+                    size: const Size(14, 14),
+                    painter: _ShieldCrossPainter(color: emeraldTheme),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
                     'Chaiyaphod Laochumni (RN Developer)',
                     style: TextStyle(
                       fontSize: 11,
@@ -708,7 +690,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),            
+            const SizedBox(width: 8),
           ],
         ),
       ],
@@ -731,15 +713,14 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: const BoxDecoration(
               color: Color(0xFFD9EBCF),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.park_rounded,
-              color: Color(0xFF4C7A3F),
-              size: 26,
+            child: CustomPaint(
+              size: const Size(26, 26),
+              painter: _HealthTreePainter(),
             ),
           ),
           const SizedBox(width: 12),
@@ -844,15 +825,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: feedback.themeColor.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  feedback.iconData,
-                  size: 34,
-                  color: feedback.themeColor,
+                child: CustomPaint(
+                  size: const Size(36, 36),
+                  painter: _HealthMascotPainter(
+                    tier: feedback.tier,
+                    color: feedback.themeColor,
+                  ),
                 ),
               ),
             ],
@@ -871,10 +854,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.lightbulb_circle_rounded,
-                  size: 22,
-                  color: feedback.themeColor,
+                CustomPaint(
+                  size: const Size(20, 20),
+                  painter: _LightbulbVectorPainter(color: feedback.themeColor),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -914,7 +896,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildMenuCard({
     required String title,
     required String subtitle,
-    required IconData icon,
+    required MenuIconType iconType,
     required String imagePath,
     required Color barColor,
     required VoidCallback onTap,
@@ -971,7 +953,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Colors.black.withValues(alpha: 0.35),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: Colors.white, size: 20),
+                  child: CustomPaint(
+                    size: const Size(20, 20),
+                    painter: _MenuVectorIconPainter(
+                      type: iconType,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
               Positioned(
@@ -1025,20 +1013,29 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 // ==========================================
-// 🚀 Top-level Evaluator Classes
+// 🚀 Enums & Evaluators
 // ==========================================
+
+enum MenuIconType {
+  bloodPressure,
+  medication,
+  nutrition,
+  aiDoctor,
+  healthBook,
+  profile,
+}
 
 class HealthFeedbackModel {
   final String statusTitle;
   final String adviceText;
-  final IconData iconData;
+  final int tier;
   final Color themeColor;
   final Color bgColor;
 
   HealthFeedbackModel({
     required this.statusTitle,
     required this.adviceText,
-    required this.iconData,
+    required this.tier,
     required this.themeColor,
     required this.bgColor,
   });
@@ -1056,7 +1053,7 @@ class HealthFeedbackEvaluator {
       return HealthFeedbackModel(
         statusTitle: 'ยังไม่มีข้อมูลความดัน',
         adviceText: 'แนะนำวัดความดันช่วงเช้า (หลังตื่นนอน) อย่างน้อยวันละ 1 ครั้งค่ะ',
-        iconData: Icons.add_chart_rounded,
+        tier: 0,
         themeColor: const Color(0xFF2F9E82),
         bgColor: const Color(0xFFECFDF5),
       );
@@ -1115,7 +1112,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'วิกฤติ! ต้องพบแพทย์',
           adviceText: actionAdvice,
-          iconData: Icons.warning_amber_rounded,
+          tier: 1,
           themeColor: const Color(0xFFEF4444),
           bgColor: const Color(0xFFFEF2F2),
         );
@@ -1123,7 +1120,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'ความดันระดับสูง',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_dissatisfied_rounded,
+          tier: 2,
           themeColor: const Color(0xFFF97316),
           bgColor: const Color(0xFFFFF7ED),
         );
@@ -1131,7 +1128,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'เฝ้าระวัง (ค่อนข้างสูง)',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_neutral_rounded,
+          tier: 3,
           themeColor: const Color(0xFFEAB308),
           bgColor: const Color(0xFFFEFCE8),
         );
@@ -1140,7 +1137,7 @@ class HealthFeedbackEvaluator {
         return HealthFeedbackModel(
           statusTitle: 'ความดันปกติ (ดีเยี่ยม)',
           adviceText: actionAdvice,
-          iconData: Icons.sentiment_very_satisfied_rounded,
+          tier: 4,
           themeColor: const Color(0xFF2F9E82),
           bgColor: const Color(0xFFECFDF5),
         );
@@ -1156,4 +1153,377 @@ class HealthFeedbackEvaluator {
     }
     return false;
   }
+}
+
+// =========================================================================
+// 🎨 Pure Canvas Vector Painters (100% Canvas Vector - No Icon Font Needed)
+// =========================================================================
+
+class _ShieldCrossPainter extends CustomPainter {
+  final Color color;
+  _ShieldCrossPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final shieldPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final path = Path()
+      ..moveTo(w * 0.5, h * 0.05)
+      ..lineTo(w * 0.9, h * 0.22)
+      ..cubicTo(w * 0.9, h * 0.62, w * 0.55, h * 0.88, w * 0.5, h * 0.98)
+      ..cubicTo(w * 0.45, h * 0.88, w * 0.1, h * 0.62, w * 0.1, h * 0.22)
+      ..close();
+
+    canvas.drawPath(path, shieldPaint);
+
+    // Cross ตรงกลาง
+    final crossPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final vBar = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(w * 0.5, h * 0.48), width: w * 0.16, height: h * 0.42),
+      const Radius.circular(2),
+    );
+    final hBar = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(w * 0.5, h * 0.48), width: w * 0.42, height: h * 0.16),
+      const Radius.circular(2),
+    );
+
+    canvas.drawRRect(vBar, crossPaint);
+    canvas.drawRRect(hBar, crossPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ShieldCrossPainter old) => old.color != color;
+}
+
+class _HealthTreePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // ลำต้น
+    final trunkPaint = Paint()
+      ..color = const Color(0xFF8B5A2B)
+      ..style = PaintingStyle.fill;
+
+    final trunkPath = Path()
+      ..moveTo(w * 0.42, h * 0.48)
+      ..lineTo(w * 0.58, h * 0.48)
+      ..lineTo(w * 0.66, h * 0.95)
+      ..lineTo(w * 0.34, h * 0.95)
+      ..close();
+    canvas.drawPath(trunkPath, trunkPaint);
+
+    // พุ่มใบ
+    final leafDark = Paint()..color = const Color(0xFF4C7A3F);
+    final leafLight = Paint()..color = const Color(0xFF679E55);
+
+    canvas.drawCircle(Offset(w * 0.33, h * 0.48), w * 0.28, leafDark);
+    canvas.drawCircle(Offset(w * 0.67, h * 0.48), w * 0.28, leafDark);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.30), w * 0.32, leafLight);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+class _HealthMascotPainter extends CustomPainter {
+  final int tier;
+  final Color color;
+
+  _HealthMascotPainter({required this.tier, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final center = Offset(w / 2, h / 2);
+    final radius = w / 2;
+
+    // วงกลมพื้นหลังใบหน้า
+    final facePaint = Paint()..color = color;
+    canvas.drawCircle(center, radius, facePaint);
+
+    final linePaint = Paint()
+      ..color = Colors.white
+      ..strokeWidth = w * 0.08
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final dotPaint = Paint()..color = Colors.white;
+
+    if (tier == 4 || tier == 0) {
+      // หน้าตายิ้มแย้มมีความสุข
+      final leftEyePath = Path()
+        ..moveTo(w * 0.28, h * 0.42)
+        ..quadraticBezierTo(w * 0.35, h * 0.32, w * 0.42, h * 0.42);
+      final rightEyePath = Path()
+        ..moveTo(w * 0.58, h * 0.42)
+        ..quadraticBezierTo(w * 0.65, h * 0.32, w * 0.72, h * 0.42);
+      canvas.drawPath(leftEyePath, linePaint);
+      canvas.drawPath(rightEyePath, linePaint);
+
+      // รอยยิ้ม
+      final mouthPath = Path()
+        ..moveTo(w * 0.30, h * 0.60)
+        ..quadraticBezierTo(w * 0.50, h * 0.82, w * 0.70, h * 0.60);
+      canvas.drawPath(mouthPath, linePaint);
+    } else if (tier == 3) {
+      // หน้าเฉยๆ เฝ้าระวัง
+      canvas.drawCircle(Offset(w * 0.35, h * 0.40), w * 0.07, dotPaint);
+      canvas.drawCircle(Offset(w * 0.65, h * 0.40), w * 0.07, dotPaint);
+      canvas.drawLine(Offset(w * 0.35, h * 0.68), Offset(w * 0.65, h * 0.68), linePaint);
+    } else if (tier == 2) {
+      // หน้ากังวล ตาตก ปากคว่ำ
+      canvas.drawCircle(Offset(w * 0.35, h * 0.42), w * 0.07, dotPaint);
+      canvas.drawCircle(Offset(w * 0.65, h * 0.42), w * 0.07, dotPaint);
+      final sadMouth = Path()
+        ..moveTo(w * 0.30, h * 0.72)
+        ..quadraticBezierTo(w * 0.50, h * 0.58, w * 0.70, h * 0.72);
+      canvas.drawPath(sadMouth, linePaint);
+    } else {
+      // วิกฤติ ตา X และปากตกใจ
+      canvas.drawLine(Offset(w * 0.28, h * 0.34), Offset(w * 0.42, h * 0.48), linePaint);
+      canvas.drawLine(Offset(w * 0.42, h * 0.34), Offset(w * 0.28, h * 0.48), linePaint);
+      canvas.drawLine(Offset(w * 0.58, h * 0.34), Offset(w * 0.72, h * 0.48), linePaint);
+      canvas.drawLine(Offset(w * 0.72, h * 0.34), Offset(w * 0.58, h * 0.48), linePaint);
+      canvas.drawCircle(Offset(w * 0.50, h * 0.70), w * 0.12, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HealthMascotPainter old) =>
+      old.tier != tier || old.color != color;
+}
+
+class _LightbulbVectorPainter extends CustomPainter {
+  final Color color;
+  _LightbulbVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()
+      ..moveTo(w * 0.35, h * 0.70)
+      ..cubicTo(w * 0.15, h * 0.55, w * 0.15, h * 0.20, w * 0.50, h * 0.15)
+      ..cubicTo(w * 0.85, h * 0.20, w * 0.85, h * 0.55, w * 0.65, h * 0.70)
+      ..close();
+    canvas.drawPath(path, stroke);
+
+    canvas.drawLine(Offset(w * 0.40, h * 0.82), Offset(w * 0.60, h * 0.82), stroke);
+    canvas.drawLine(Offset(w * 0.45, h * 0.92), Offset(w * 0.55, h * 0.92), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LightbulbVectorPainter old) => old.color != color;
+}
+
+class _CalendarVectorPainter extends CustomPainter {
+  final Color color;
+  _CalendarVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round;
+
+    final bodyRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.1, h * 0.2, w * 0.8, h * 0.75),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(bodyRect, paint);
+
+    canvas.drawLine(Offset(w * 0.1, h * 0.42), Offset(w * 0.9, h * 0.42), paint);
+    canvas.drawLine(Offset(w * 0.30, h * 0.08), Offset(w * 0.30, h * 0.24), paint);
+    canvas.drawLine(Offset(w * 0.70, h * 0.08), Offset(w * 0.70, h * 0.24), paint);
+
+    final dotPaint = Paint()..color = color;
+    canvas.drawCircle(Offset(w * 0.32, h * 0.60), 1.8, dotPaint);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.60), 1.8, dotPaint);
+    canvas.drawCircle(Offset(w * 0.68, h * 0.60), 1.8, dotPaint);
+    canvas.drawCircle(Offset(w * 0.32, h * 0.78), 1.8, dotPaint);
+    canvas.drawCircle(Offset(w * 0.50, h * 0.78), 1.8, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CalendarVectorPainter old) => old.color != color;
+}
+
+class _InfoCirclePainter extends CustomPainter {
+  final Color color;
+  _InfoCirclePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawCircle(Offset(w / 2, h / 2), w * 0.42, stroke);
+
+    final fill = Paint()..color = color;
+    canvas.drawCircle(Offset(w * 0.5, h * 0.32), w * 0.06, fill);
+    canvas.drawRect(Rect.fromLTWH(w * 0.44, h * 0.44, w * 0.12, h * 0.28), fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _InfoCirclePainter old) => old.color != color;
+}
+
+class _MenuVectorIconPainter extends CustomPainter {
+  final MenuIconType type;
+  final Color color;
+
+  _MenuVectorIconPainter({required this.type, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final paintStroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final paintFill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    switch (type) {
+      case MenuIconType.bloodPressure:
+        // คลื่นหัวใจ EKG Pulse
+        final path = Path()
+          ..moveTo(w * 0.1, h * 0.55)
+          ..lineTo(w * 0.32, h * 0.55)
+          ..lineTo(w * 0.42, h * 0.18)
+          ..lineTo(w * 0.56, h * 0.88)
+          ..lineTo(w * 0.68, h * 0.38)
+          ..lineTo(w * 0.76, h * 0.55)
+          ..lineTo(w * 0.90, h * 0.55);
+        canvas.drawPath(path, paintStroke);
+        break;
+
+      case MenuIconType.medication:
+        // แคปซูลยาเฉียง 45 องศา
+        canvas.save();
+        canvas.translate(w / 2, h / 2);
+        canvas.rotate(-math.pi / 4);
+        final pill = RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: w * 0.36, height: h * 0.8),
+          Radius.circular(w * 0.18),
+        );
+        canvas.drawRRect(pill, paintStroke);
+        canvas.drawLine(Offset(-w * 0.18, 0), Offset(w * 0.18, 0), paintStroke);
+        canvas.restore();
+        break;
+
+      case MenuIconType.nutrition:
+        // ส้อมและช้อน
+        // ส้อม
+        final fork = Path()
+          ..moveTo(w * 0.25, h * 0.15)
+          ..lineTo(w * 0.25, h * 0.45)
+          ..cubicTo(w * 0.25, h * 0.55, w * 0.35, h * 0.55, w * 0.35, h * 0.45)
+          ..lineTo(w * 0.35, h * 0.15)
+          ..moveTo(w * 0.30, h * 0.52)
+          ..lineTo(w * 0.30, h * 0.88);
+        canvas.drawPath(fork, paintStroke);
+        // ช้อน
+        final spoon = Path()
+          ..addOval(Rect.fromLTWH(w * 0.60, h * 0.15, w * 0.22, h * 0.38))
+          ..moveTo(w * 0.71, h * 0.53)
+          ..lineTo(w * 0.71, h * 0.88);
+        canvas.drawPath(spoon, paintStroke);
+        break;
+
+      case MenuIconType.aiDoctor:
+        // บับเบิ้ลข้อความแชท
+        final bubble = Path()
+          ..moveTo(w * 0.2, h * 0.2)
+          ..lineTo(w * 0.8, h * 0.2)
+          ..quadraticBezierTo(w * 0.9, h * 0.2, w * 0.9, h * 0.35)
+          ..lineTo(w * 0.9, h * 0.65)
+          ..quadraticBezierTo(w * 0.9, h * 0.80, w * 0.8, h * 0.80)
+          ..lineTo(w * 0.4, h * 0.80)
+          ..lineTo(w * 0.2, h * 0.95)
+          ..lineTo(w * 0.25, h * 0.80)
+          ..lineTo(w * 0.2, h * 0.80)
+          ..quadraticBezierTo(w * 0.1, h * 0.80, w * 0.1, h * 0.65)
+          ..lineTo(w * 0.1, h * 0.35)
+          ..quadraticBezierTo(w * 0.1, h * 0.2, w * 0.2, h * 0.2)
+          ..close();
+        canvas.drawPath(bubble, paintStroke);
+        // จุดสนทนา 3 จุด
+        canvas.drawCircle(Offset(w * 0.34, h * 0.50), 1.8, paintFill);
+        canvas.drawCircle(Offset(w * 0.50, h * 0.50), 1.8, paintFill);
+        canvas.drawCircle(Offset(w * 0.66, h * 0.50), 1.8, paintFill);
+        break;
+
+      case MenuIconType.healthBook:
+        // กราฟแท่งสถิติ 3 แท่ง
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.16, h * 0.48, w * 0.18, h * 0.42),
+            const Radius.circular(2),
+          ),
+          paintFill,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.41, h * 0.22, w * 0.18, h * 0.68),
+            const Radius.circular(2),
+          ),
+          paintFill,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(w * 0.66, h * 0.35, w * 0.18, h * 0.55),
+            const Radius.circular(2),
+          ),
+          paintFill,
+        );
+        break;
+
+      case MenuIconType.profile:
+        // ศีรษะและลำตัว
+        canvas.drawCircle(Offset(w * 0.5, h * 0.32), w * 0.20, paintStroke);
+        final body = Path()
+          ..moveTo(w * 0.18, h * 0.86)
+          ..cubicTo(w * 0.18, h * 0.60, w * 0.82, h * 0.60, w * 0.82, h * 0.86);
+        canvas.drawPath(body, paintStroke);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MenuVectorIconPainter old) =>
+      old.type != type || old.color != color;
 }

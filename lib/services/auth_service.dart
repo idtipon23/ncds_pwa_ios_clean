@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -18,7 +19,7 @@ class AuthService {
       return await _supabase.auth.signInAnonymously();
     } catch (e) {
       // c) จัดการ error
-      print('Error signing in anonymously: $e');
+      debugPrint('Error signing in anonymously: $e');
       rethrow;
     }
   }

@@ -43,9 +43,6 @@ class _IdentityRegistrationScreenState
   List<Map<String, dynamic>> _hospitals = [];
   String? _selectedHospitalId;
 
-  List<String> _savedHnList = [];
-  String? _selectedSavedHn;
-
   @override
   void initState() {
     super.initState();
@@ -113,8 +110,6 @@ class _IdentityRegistrationScreenState
           _hospitals = hospitalList;
           _ensureFallbackHospital();
 
-          _savedHnList = uniqueHnList;
-
           if (_hospitals.isNotEmpty) {
             _selectedHospitalId = _hospitals.first['id'].toString();
           }
@@ -126,11 +121,9 @@ class _IdentityRegistrationScreenState
 
           if (savedHn.isNotEmpty) {
             _hnController.text = savedHn.replaceAll('HN-', '');
-            _selectedSavedHn = savedHn;
             _isExistingPatient = true;
           } else if (uniqueHnList.isNotEmpty) {
             _hnController.text = uniqueHnList.first.replaceAll('HN-', '');
-            _selectedSavedHn = uniqueHnList.first;
             _isExistingPatient = true;
           }
         });
@@ -420,7 +413,7 @@ class _IdentityRegistrationScreenState
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              value: _hospitals.any((h) =>
+                              initialValue: _hospitals.any((h) =>
                                       h['id'].toString() == _selectedHospitalId)
                                   ? _selectedHospitalId
                                   : (_hospitals.isNotEmpty

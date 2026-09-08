@@ -68,7 +68,7 @@ class _ModernVoiceButtonState extends State<ModernVoiceButton>
                     shape: BoxShape.circle,
                     color: const Color(
                       0xFFEF4444,
-                    ).withOpacity(0.3 * (1 - _controller.value)),
+                    ).withValues(alpha: 0.3 * (1 - _controller.value)),
                   ),
                 );
               },
@@ -81,13 +81,13 @@ class _ModernVoiceButtonState extends State<ModernVoiceButton>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: LinearGradient(
-                colors: [buttonColor.withOpacity(0.85), buttonColor],
+                colors: [buttonColor.withValues(alpha: 0.85), buttonColor],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: buttonColor.withOpacity(0.4),
+                  color: buttonColor.withValues(alpha: 0.4),
                   blurRadius: 25,
                   spreadRadius: 5,
                   offset: const Offset(0, 10),

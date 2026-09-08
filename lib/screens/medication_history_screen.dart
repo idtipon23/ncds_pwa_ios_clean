@@ -229,21 +229,21 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: const Text('มื้อเช้า', style: TextStyle(color: primaryTextColor, fontSize: 14)),
                       value: mActive,
-                      activeColor: emeraldTheme,
+                      activeThumbColor: emeraldTheme,
                       onChanged: (val) => setModalState(() => mActive = val),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('มื้อกลางวัน', style: TextStyle(color: primaryTextColor, fontSize: 14)),
                       value: nActive,
-                      activeColor: emeraldTheme,
+                      activeThumbColor: emeraldTheme,
                       onChanged: (val) => setModalState(() => nActive = val),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('มื้อเย็น', style: TextStyle(color: primaryTextColor, fontSize: 14)),
                       value: eActive,
-                      activeColor: emeraldTheme,
+                      activeThumbColor: emeraldTheme,
                       onChanged: (val) => setModalState(() => eActive = val),
                     ),
                   ],
@@ -866,7 +866,7 @@ class _MedicationHistoryScreenState extends State<MedicationHistoryScreen> {
                   ),
                   Switch(
                     value: isActive,
-                    activeColor: emeraldTheme,
+                    activeThumbColor: emeraldTheme,
                     onChanged: (val) {
                       setState(() => med[activeKey] = val);
                       _updateMedicationSettings(med);

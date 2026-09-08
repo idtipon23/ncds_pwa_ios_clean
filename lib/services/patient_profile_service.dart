@@ -151,23 +151,30 @@ class PatientProfileService {
         final Map<String, dynamic> updatePayload = {};
 
         // ข้อมูลส่วนตัวพื้นฐาน
-        if (newData.containsKey('first_name'))
+        if (newData.containsKey('first_name')) {
           updatePayload['first_name'] = newData['first_name'];
-        if (newData.containsKey('last_name'))
+        }
+        if (newData.containsKey('last_name')) {
           updatePayload['last_name'] = newData['last_name'];
-        if (newData.containsKey('name'))
+        }
+        if (newData.containsKey('name')) {
           updatePayload['name'] = newData['name'];
-        if (newData.containsKey('age')) updatePayload['age'] = newData['age'];
-        if (newData.containsKey('gender'))
+        }
+        if (newData.containsKey('age')) {
+          updatePayload['age'] = newData['age'];
+        }
+        if (newData.containsKey('gender')) {
           updatePayload['gender'] = newData['gender'];
+        }
         if (newData.containsKey('underlying_diseases')) {
           updatePayload['underlying_diseases'] = newData['underlying_diseases'];
         } else if (newData.containsKey('diseases')) {
           updatePayload['underlying_diseases'] = newData['diseases'];
         }
 
-        if (newData.containsKey('smokes'))
+        if (newData.containsKey('smokes')) {
           updatePayload['smokes'] = newData['smokes'];
+        }
 
         // สัดส่วนร่างกาย
         if (newData.containsKey('weight_kg')) {
@@ -185,10 +192,12 @@ class PatientProfileService {
         // ค่าคำนวณ BMI, BMR, TDEE
         if (newData.containsKey('bmi')) updatePayload['bmi'] = newData['bmi'];
         if (newData.containsKey('bmr')) updatePayload['bmr'] = newData['bmr'];
-        if (newData.containsKey('tdee'))
+        if (newData.containsKey('tdee')) {
           updatePayload['tdee'] = newData['tdee'];
-        if (newData.containsKey('activity_level'))
+        }
+        if (newData.containsKey('activity_level')) {
           updatePayload['activity_level'] = newData['activity_level'];
+        }
 
         // โรคประจำตัวและพฤติกรรม
         if (newData.containsKey('underlying_diseases')) {
@@ -197,8 +206,9 @@ class PatientProfileService {
           updatePayload['underlying_diseases'] = newData['diseases'];
         }
 
-        if (newData.containsKey('smokes'))
+        if (newData.containsKey('smokes')) {
           updatePayload['smokes'] = newData['smokes'];
+        }
         // 🌟 เพิ่มการ Sync ตัวแปรสภาวะเฉพาะทาง 6 มิติเข้า Supabase
         const conditionKeys = [
           'has_cvd',

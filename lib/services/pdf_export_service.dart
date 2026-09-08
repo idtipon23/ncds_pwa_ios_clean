@@ -145,7 +145,7 @@ class PdfExportService {
             pw.Text('รายการบันทึกประวัติสัญญาณชีพ', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
 
-            pw.Table.fromTextArray(
+            pw.TableHelper.fromTextArray(
               headers: ['วัน-เวลา', 'ความดัน (mmHg)', 'ชีพจร', 'ระดับความเสี่ยง', 'คำแนะนำระบบ'],
               data: vitalHistory.map((item) {
                 final int sys = (item['systolic'] as num?)?.toInt() ?? 0;

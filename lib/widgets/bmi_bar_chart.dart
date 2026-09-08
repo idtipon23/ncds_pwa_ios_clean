@@ -29,12 +29,13 @@ class BmiBarChart extends StatelessWidget {
 
     // คำนวณตำแหน่งลูกศรชี้ (แบบง่ายๆ เทียบสัดส่วน)
     double alignment = -1.0;
-    if (bmi < 15)
+    if (bmi < 15) {
       alignment = -1.0;
-    else if (bmi > 35)
+    } else if (bmi > 35) {
       alignment = 1.0;
-    else
+    } else {
       alignment = ((bmi - 15) / 20) * 2 - 1; // สเกลจาก 15 ถึง 35
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -43,7 +44,7 @@ class BmiBarChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4))
         ],
@@ -60,7 +61,7 @@ class BmiBarChart extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: activeColor.withOpacity(0.1),
+                  color: activeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
