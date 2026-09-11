@@ -56,17 +56,23 @@ class _NutritionScreenState extends State<NutritionScreen> {
     super.dispose();
   }
 
+  double _profileNumber(dynamic value, [double fallback = 0.0]) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
-      final profile = await _profileService.getProfile();
+      final profile = await _profileService.validateAndLoadProfile() ??
+          await _profileService.getProfile();
 
       if (patientId != null) {
         _patientId = patientId;
-        _bmr = (profile?['bmr'] as num?)?.toDouble() ?? 0.0;
-        _tdee = (profile?['tdee'] as num?)?.toDouble() ?? 2000.0;
-        _weightKg = (profile?['weight_kg'] as num?)?.toDouble() ?? 60.0;
+        _bmr = _profileNumber(profile?['bmr']);
+        _tdee = _profileNumber(profile?['tdee'], 2000.0);
+        _weightKg = _profileNumber(profile?['weight_kg'], 60.0);
         _underlyingDiseases = profile?['underlying_diseases'] ?? '';
 
         final vitals = await _vitalRepository.getLast7Days(patientId);
@@ -509,10 +515,10 @@ class _NutritionScreenState extends State<NutritionScreen> {
                       child: Column(
                         children: zones
                             .map((z) => RadioListTile<int>(
-                                  value: z['value'] as int,
+                                  value: z['zone'] as int,
                                   activeColor: z['color'] as Color,
                                   title: Text(
-                                    z['label'] as String,
+                                    z['title'] as String,
                                     style: const TextStyle(
                                       fontSize: 14,
                                       color: primaryTextColor,
@@ -674,7 +680,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       (sum, item) => sum + ((item['calories_burned'] as num?)?.toDouble() ?? 0.0),
     );
 
-    final double targetEnergy = _bmr > 0 ? _bmr : (_tdee > 0 ? _tdee : 1500.0);
+    final double targetEnergy = _tdee > 0 ? _tdee : (_bmr > 0 ? _bmr : 1500.0);
 
     return Scaffold(
       backgroundColor: creamBgColor,
