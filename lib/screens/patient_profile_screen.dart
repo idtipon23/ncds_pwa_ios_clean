@@ -339,7 +339,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                     ),
                     child: CustomPaint(
                       size: const Size(20, 20),
-                      painter: _BellVectorPainter(color: const Color(0xFF06C755)),
+                      painter:
+                          _BellVectorPainter(color: const Color(0xFF06C755)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -376,7 +377,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -396,7 +396,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   size: const Size(16, 16),
                   painter: isLineConnected
                       ? _CheckCircleVectorPainter(color: emeraldTheme)
-                      : _InfoCircleVectorPainter(color: const Color(0xFFD97706)),
+                      : _InfoCircleVectorPainter(
+                          color: const Color(0xFFD97706)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -417,7 +418,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
@@ -451,7 +451,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
   Future<void> _showLineConnectionDialog() async {
     String selectedRole = _lineRecipientRole;
     final manualIdCtrl = TextEditingController(text: _lineUserId ?? '');
-    
+
     final String pairingCode = (100000 + Random().nextInt(900000)).toString();
 
     final patientId = await _profileService.getCurrentPatientId();
@@ -497,7 +497,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
           contentPadding: const EdgeInsets.symmetric(horizontal: 20),
           title: Row(
@@ -510,7 +511,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 child: CustomPaint(
                   size: const Size(22, 22),
-                  painter: _ChatBubbleVectorPainter(color: const Color(0xFF06C755)),
+                  painter:
+                      _ChatBubbleVectorPainter(color: const Color(0xFF06C755)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -540,7 +542,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: primaryTextColor),
                 ),
                 const SizedBox(height: 10),
-
                 Row(
                   children: [
                     Expanded(
@@ -549,8 +550,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           setDialogState(() => selectedRole = 'patient');
                           await Supabase.instance.client
                               .from('patients')
-                              .update({'line_recipient_role': 'patient'})
-                              .eq('id', patientId);
+                              .update({'line_recipient_role': 'patient'}).eq(
+                                  'id', patientId);
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
@@ -601,8 +602,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           setDialogState(() => selectedRole = 'caregiver');
                           await Supabase.instance.client
                               .from('patients')
-                              .update({'line_recipient_role': 'caregiver'})
-                              .eq('id', patientId);
+                              .update({'line_recipient_role': 'caregiver'}).eq(
+                                  'id', patientId);
                         },
                         borderRadius: BorderRadius.circular(12),
                         child: Container(
@@ -649,7 +650,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 18),
-
                 const Text(
                   '2. วิธีเชื่อมต่อ LINE OA:',
                   style: TextStyle(
@@ -658,7 +658,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       color: primaryTextColor),
                 ),
                 const SizedBox(height: 10),
-
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
@@ -705,7 +704,6 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
                   title: const Text(
@@ -765,7 +763,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                         final updatePayload = {
                           'line_recipient_role': selectedRole,
                           'line_user_id': inputId,
-                          'line_linked_at': DateTime.now().toUtc().toIso8601String(),
+                          'line_linked_at':
+                              DateTime.now().toUtc().toIso8601String(),
                         };
 
                         await Supabase.instance.client
@@ -928,7 +927,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label, ProfileVectorIconType iconType) {
+  InputDecoration _inputDecoration(
+      String label, ProfileVectorIconType iconType) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: secondaryTextColor, fontSize: 13),
@@ -936,7 +936,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
         padding: const EdgeInsets.all(12),
         child: CustomPaint(
           size: const Size(20, 20),
-          painter: _ProfileVectorIconPainter(type: iconType, color: earthyBrown),
+          painter:
+              _ProfileVectorIconPainter(type: iconType, color: earthyBrown),
         ),
       ),
       filled: true,
@@ -1065,7 +1066,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
               children: [
                 CustomPaint(
                   size: const Size(18, 18),
-                  painter: _LightbulbVectorPainter(color: const Color(0xFFB45309)),
+                  painter:
+                      _LightbulbVectorPainter(color: const Color(0xFFB45309)),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1336,7 +1338,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                             children: [
                               CustomPaint(
                                 size: const Size(22, 22),
-                                painter: _BadgeVectorPainter(color: earthyBrown),
+                                painter:
+                                    _BadgeVectorPainter(color: earthyBrown),
                               ),
                               const SizedBox(width: 8),
                               const Text(
@@ -1357,8 +1360,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _fNameController,
                                   style:
                                       const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration(
-                                      'ชื่อ', ProfileVectorIconType.personOutline),
+                                  decoration: _inputDecoration('ชื่อ',
+                                      ProfileVectorIconType.personOutline),
                                   validator: (v) => v!.trim().isEmpty
                                       ? 'กรุณากรอกชื่อ'
                                       : null,
@@ -1370,8 +1373,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   controller: _lNameController,
                                   style:
                                       const TextStyle(color: primaryTextColor),
-                                  decoration:
-                                      _inputDecoration('นามสกุล', ProfileVectorIconType.personFill),
+                                  decoration: _inputDecoration('นามสกุล',
+                                      ProfileVectorIconType.personFill),
                                   validator: (v) => v!.trim().isEmpty
                                       ? 'กรุณากรอกนามสกุล'
                                       : null,
@@ -1387,8 +1390,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                   initialValue: _gender,
                                   style: const TextStyle(
                                       color: primaryTextColor, fontSize: 15),
-                                  decoration: _inputDecoration(
-                                      'เพศกำเนิด', ProfileVectorIconType.gender),
+                                  decoration: _inputDecoration('เพศกำเนิด',
+                                      ProfileVectorIconType.gender),
                                   items: const [
                                     DropdownMenuItem(
                                         value: 'ชาย', child: Text('ชาย')),
@@ -1450,8 +1453,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                                           decimal: true),
                                   style:
                                       const TextStyle(color: primaryTextColor),
-                                  decoration: _inputDecoration(
-                                      'ส่วนสูง (ซม.)', ProfileVectorIconType.heightRuler),
+                                  decoration: _inputDecoration('ส่วนสูง (ซม.)',
+                                      ProfileVectorIconType.heightRuler),
                                   onChanged: (_) =>
                                       setState(() => _calculateMetrics()),
                                   validator: (v) =>
@@ -1507,8 +1510,8 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                           TextFormField(
                             controller: _diseaseController,
                             style: const TextStyle(color: primaryTextColor),
-                            decoration: _inputDecoration(
-                                'โรคประจำตัว', ProfileVectorIconType.medicalBriefcase),
+                            decoration: _inputDecoration('โรคประจำตัว',
+                                ProfileVectorIconType.medicalBriefcase),
                           ),
                           const SizedBox(height: 16),
                           Container(
@@ -1585,11 +1588,297 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 32),
+                    SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: earthyBrown,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                          elevation: 2,
+                        ),
+                        onPressed: _isSaving ? null : _saveProfile,
+                        child: _isSaving
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
+                            : const Text(
+                                'บันทึกข้อมูลและเป้าหมายพลังงาน',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ⚠️ Danger Zone: จัดการสิทธิ์ความเป็นส่วนตัวและลบข้อมูล
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: const Color(0xFFFECACA), width: 1.2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              CustomPaint(
+                                size: Size(20, 20),
+                                painter: _TrashCanVectorPainter(
+                                    color: Color(0xFFDC2626)),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'การยกเลิกการเชื่อมต่อ (Danger Zone)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'หากคุณไม่ต้องการใช้งานระบบนี้แล้ว หรือต้องการยกเลิกการเชื่อมต่อกับคลินิกอย่างสมบูรณ์ สามารถกดลบข้อมูลของคุณทั้งหมดได้ที่นี่',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF991B1B),
+                                height: 1.4),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                foregroundColor: const Color(0xFFDC2626),
+                                side: const BorderSide(
+                                    color: Color(0xFFDC2626), width: 1.2),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed: _confirmAndDeleteAccount,
+                              icon: const CustomPaint(
+                                size: Size(16, 16),
+                                painter: _TrashCanVectorPainter(
+                                    color: Color(0xFFDC2626)),
+                              ),
+                              label: const Text(
+                                'ลบข้อมูลตัวเองและยกเลิกการเชื่อมต่อ',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
             ),
     );
+  }
+
+  // 🗑️ ฟังก์ชันยืนยันและดำเนินการลบข้อมูลถาวร
+  Future<void> _confirmAndDeleteAccount() async {
+    final patientId = await _profileService.getCurrentPatientId();
+    if (patientId == null || patientId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ไม่พบรหัสผู้ป่วย ไม่สามารถดำเนินการได้'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+      return;
+    }
+
+    final confirmTextController = TextEditingController();
+    if (!mounted) return;
+
+    final isConfirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const CustomPaint(
+                size: Size(22, 22),
+                painter: _TrashCanVectorPainter(color: Color(0xFFEF4444)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'ยืนยันลบข้อมูลถาวร',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTextColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'หากคุณไม่ต้องการเชื่อมต่อกับระบบอีกต่อไป การดำเนินการนี้จะลบประวัติความดัน, ผลแล็บ, ประวัติการทานยา และเวชระเบียนทั้งหมดของคุณออกจากระบบอย่างถาวร โดยไม่สามารถกู้คืนได้',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: secondaryTextColor,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'พิมพ์คำว่า "ลบข้อมูล" เพื่อยืนยัน:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTextColor,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmTextController,
+                style: const TextStyle(fontSize: 14, color: primaryTextColor),
+                decoration: InputDecoration(
+                  hintText: 'ลบข้อมูล',
+                  hintStyle:
+                      const TextStyle(color: mutedTextColor, fontSize: 13),
+                  filled: true,
+                  fillColor: const Color(0xFFFAFAFA),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: Color(0xFFEADBCE)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('ยกเลิก',
+                      style: TextStyle(color: mutedTextColor)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFEF4444),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    if (confirmTextController.text.trim() == 'ลบข้อมูล') {
+                      Navigator.pop(ctx, true);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content:
+                              Text('กรุณาพิมพ์คำว่า "ลบข้อมูล" ให้ถูกต้อง'),
+                          backgroundColor: Color(0xFFEF4444),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text(
+                    'ยืนยันลบข้อมูล',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (isConfirmed != true) return;
+
+    // แสดงหน้าต่าง Loading ระหว่างส่งคำสั่งลบข้อมูล
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(
+          child: CircularProgressIndicator(color: Color(0xFFEF4444)),
+        ),
+      );
+    }
+
+    try {
+      await _profileService.purgePatientDataAndSession(patientId);
+
+      if (mounted) {
+        Navigator.of(context).pop(); // ปิด Loading dialog
+
+        // ส่งกลับไปยังหน้าแรกสุด (AppStartupGate / Login) และล้าง Route ทั้งหมด
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/login', (route) => false);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ลบข้อมูลและยกเลิกการเชื่อมต่อเรียบร้อยแล้ว'),
+            backgroundColor: emeraldTheme,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // ปิด Loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการลบข้อมูล: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1653,12 +1942,17 @@ class _ProfileVectorIconPainter extends CustomPainter {
         // สัญลักษณ์เพศรวม ชาย-หญิง
         canvas.drawCircle(Offset(w * 0.40, h * 0.50), w * 0.26, stroke);
         // ลูกศรชายขึ้นขวา
-        canvas.drawLine(Offset(w * 0.60, h * 0.35), Offset(w * 0.85, h * 0.15), stroke);
-        canvas.drawLine(Offset(w * 0.68, h * 0.15), Offset(w * 0.85, h * 0.15), stroke);
-        canvas.drawLine(Offset(w * 0.85, h * 0.15), Offset(w * 0.85, h * 0.32), stroke);
+        canvas.drawLine(
+            Offset(w * 0.60, h * 0.35), Offset(w * 0.85, h * 0.15), stroke);
+        canvas.drawLine(
+            Offset(w * 0.68, h * 0.15), Offset(w * 0.85, h * 0.15), stroke);
+        canvas.drawLine(
+            Offset(w * 0.85, h * 0.15), Offset(w * 0.85, h * 0.32), stroke);
         // ไม้กางเขนหญิงลงล่าง
-        canvas.drawLine(Offset(w * 0.40, h * 0.76), Offset(w * 0.40, h * 0.95), stroke);
-        canvas.drawLine(Offset(w * 0.28, h * 0.86), Offset(w * 0.52, h * 0.86), stroke);
+        canvas.drawLine(
+            Offset(w * 0.40, h * 0.76), Offset(w * 0.40, h * 0.95), stroke);
+        canvas.drawLine(
+            Offset(w * 0.28, h * 0.86), Offset(w * 0.52, h * 0.86), stroke);
         break;
 
       case ProfileVectorIconType.cake:
@@ -1668,7 +1962,8 @@ class _ProfileVectorIconPainter extends CustomPainter {
           const Radius.circular(3),
         );
         canvas.drawRRect(cakeBody, stroke);
-        canvas.drawLine(Offset(w * 0.5, h * 0.25), Offset(w * 0.5, h * 0.45), stroke);
+        canvas.drawLine(
+            Offset(w * 0.5, h * 0.25), Offset(w * 0.5, h * 0.45), stroke);
         canvas.drawCircle(Offset(w * 0.5, h * 0.16), 2, fill);
         break;
 
@@ -1680,29 +1975,41 @@ class _ProfileVectorIconPainter extends CustomPainter {
         );
         canvas.drawRRect(scale, stroke);
         canvas.drawArc(
-          Rect.fromCenter(center: Offset(w * 0.5, h * 0.38), width: w * 0.32, height: h * 0.28),
+          Rect.fromCenter(
+              center: Offset(w * 0.5, h * 0.38),
+              width: w * 0.32,
+              height: h * 0.28),
           pi,
           pi,
           false,
           stroke,
         );
-        canvas.drawLine(Offset(w * 0.5, h * 0.38), Offset(w * 0.56, h * 0.30), stroke);
+        canvas.drawLine(
+            Offset(w * 0.5, h * 0.38), Offset(w * 0.56, h * 0.30), stroke);
         break;
 
       case ProfileVectorIconType.heightRuler:
         // ไม้วัดส่วนสูง
-        canvas.drawLine(Offset(w * 0.35, h * 0.10), Offset(w * 0.35, h * 0.90), stroke);
-        canvas.drawLine(Offset(w * 0.35, h * 0.15), Offset(w * 0.65, h * 0.15), stroke);
-        canvas.drawLine(Offset(w * 0.35, h * 0.35), Offset(w * 0.55, h * 0.35), stroke);
-        canvas.drawLine(Offset(w * 0.35, h * 0.55), Offset(w * 0.65, h * 0.55), stroke);
-        canvas.drawLine(Offset(w * 0.35, h * 0.75), Offset(w * 0.55, h * 0.75), stroke);
-        canvas.drawLine(Offset(w * 0.35, h * 0.90), Offset(w * 0.65, h * 0.90), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.10), Offset(w * 0.35, h * 0.90), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.15), Offset(w * 0.65, h * 0.15), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.35), Offset(w * 0.55, h * 0.35), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.55), Offset(w * 0.65, h * 0.55), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.75), Offset(w * 0.55, h * 0.75), stroke);
+        canvas.drawLine(
+            Offset(w * 0.35, h * 0.90), Offset(w * 0.65, h * 0.90), stroke);
         break;
 
       case ProfileVectorIconType.analytics:
         // กราฟสถิติ BMI
-        canvas.drawLine(Offset(w * 0.15, h * 0.85), Offset(w * 0.85, h * 0.85), stroke);
-        canvas.drawLine(Offset(w * 0.15, h * 0.15), Offset(w * 0.15, h * 0.85), stroke);
+        canvas.drawLine(
+            Offset(w * 0.15, h * 0.85), Offset(w * 0.85, h * 0.85), stroke);
+        canvas.drawLine(
+            Offset(w * 0.15, h * 0.15), Offset(w * 0.15, h * 0.85), stroke);
         final line = Path()
           ..moveTo(w * 0.22, h * 0.70)
           ..lineTo(w * 0.45, h * 0.48)
@@ -1742,8 +2049,10 @@ class _ProfileVectorIconPainter extends CustomPainter {
           ..lineTo(w * 0.62, h * 0.18)
           ..lineTo(w * 0.62, h * 0.32);
         canvas.drawPath(handle, stroke);
-        canvas.drawLine(Offset(w * 0.5, h * 0.46), Offset(w * 0.5, h * 0.74), stroke);
-        canvas.drawLine(Offset(w * 0.36, h * 0.60), Offset(w * 0.64, h * 0.60), stroke);
+        canvas.drawLine(
+            Offset(w * 0.5, h * 0.46), Offset(w * 0.5, h * 0.74), stroke);
+        canvas.drawLine(
+            Offset(w * 0.36, h * 0.60), Offset(w * 0.64, h * 0.60), stroke);
         break;
     }
   }
@@ -1776,7 +2085,8 @@ class _ArrowBackVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ArrowBackVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _ArrowBackVectorPainter old) =>
+      old.color != color;
 }
 
 class _BellVectorPainter extends CustomPainter {
@@ -1804,7 +2114,8 @@ class _BellVectorPainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, stroke);
     canvas.drawArc(
-      Rect.fromCenter(center: Offset(w * 0.5, h * 0.82), width: w * 0.22, height: h * 0.16),
+      Rect.fromCenter(
+          center: Offset(w * 0.5, h * 0.82), width: w * 0.22, height: h * 0.16),
       0,
       pi,
       false,
@@ -1842,7 +2153,8 @@ class _CheckCircleVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _CheckCircleVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _CheckCircleVectorPainter old) =>
+      old.color != color;
 }
 
 class _InfoCircleVectorPainter extends CustomPainter {
@@ -1862,11 +2174,13 @@ class _InfoCircleVectorPainter extends CustomPainter {
 
     final fill = Paint()..color = color;
     canvas.drawCircle(Offset(w * 0.5, h * 0.30), w * 0.07, fill);
-    canvas.drawRect(Rect.fromLTWH(w * 0.43, h * 0.44, w * 0.14, h * 0.30), fill);
+    canvas.drawRect(
+        Rect.fromLTWH(w * 0.43, h * 0.44, w * 0.14, h * 0.30), fill);
   }
 
   @override
-  bool shouldRepaint(covariant _InfoCircleVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _InfoCircleVectorPainter old) =>
+      old.color != color;
 }
 
 class _ChatBubbleVectorPainter extends CustomPainter {
@@ -1903,7 +2217,8 @@ class _ChatBubbleVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ChatBubbleVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _ChatBubbleVectorPainter old) =>
+      old.color != color;
 }
 
 class _UserVectorPainter extends CustomPainter {
@@ -2001,7 +2316,8 @@ class _ShieldPulseVectorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _ShieldPulseVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _ShieldPulseVectorPainter old) =>
+      old.color != color;
 }
 
 class _FlameVectorPainter extends CustomPainter {
@@ -2052,12 +2368,15 @@ class _LightbulbVectorPainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, stroke);
 
-    canvas.drawLine(Offset(w * 0.40, h * 0.82), Offset(w * 0.60, h * 0.82), stroke);
-    canvas.drawLine(Offset(w * 0.45, h * 0.92), Offset(w * 0.55, h * 0.92), stroke);
+    canvas.drawLine(
+        Offset(w * 0.40, h * 0.82), Offset(w * 0.60, h * 0.82), stroke);
+    canvas.drawLine(
+        Offset(w * 0.45, h * 0.92), Offset(w * 0.55, h * 0.92), stroke);
   }
 
   @override
-  bool shouldRepaint(covariant _LightbulbVectorPainter old) => old.color != color;
+  bool shouldRepaint(covariant _LightbulbVectorPainter old) =>
+      old.color != color;
 }
 
 class _HeartVectorPainter extends CustomPainter {
@@ -2108,9 +2427,12 @@ class _BadgeVectorPainter extends CustomPainter {
     );
     canvas.drawRRect(card, stroke);
     canvas.drawCircle(Offset(w * 0.35, h * 0.48), w * 0.10, stroke);
-    canvas.drawLine(Offset(w * 0.52, h * 0.42), Offset(w * 0.75, h * 0.42), stroke);
-    canvas.drawLine(Offset(w * 0.52, h * 0.54), Offset(w * 0.75, h * 0.54), stroke);
-    canvas.drawLine(Offset(w * 0.25, h * 0.72), Offset(w * 0.75, h * 0.72), stroke);
+    canvas.drawLine(
+        Offset(w * 0.52, h * 0.42), Offset(w * 0.75, h * 0.42), stroke);
+    canvas.drawLine(
+        Offset(w * 0.52, h * 0.54), Offset(w * 0.75, h * 0.54), stroke);
+    canvas.drawLine(
+        Offset(w * 0.25, h * 0.72), Offset(w * 0.75, h * 0.72), stroke);
   }
 
   @override
@@ -2142,7 +2464,8 @@ class _SmokingVectorPainter extends CustomPainter {
       ),
       paint,
     );
-    canvas.drawRect(Rect.fromLTWH(w * 0.52, h * 0.65, w * 0.13, h * 0.18), fill);
+    canvas.drawRect(
+        Rect.fromLTWH(w * 0.52, h * 0.65, w * 0.13, h * 0.18), fill);
 
     // ควันบุหรี่โค้ง
     final smoke1 = Path()
@@ -2158,4 +2481,52 @@ class _SmokingVectorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SmokingVectorPainter old) => old.color != color;
+}
+
+class _TrashCanVectorPainter extends CustomPainter {
+  final Color color;
+  const _TrashCanVectorPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    // ฝาถัง
+    canvas.drawLine(
+        Offset(w * 0.15, h * 0.25), Offset(w * 0.85, h * 0.25), stroke);
+    final handle = Path()
+      ..moveTo(w * 0.38, h * 0.25)
+      ..lineTo(w * 0.38, h * 0.12)
+      ..lineTo(w * 0.62, h * 0.12)
+      ..lineTo(w * 0.62, h * 0.25);
+    canvas.drawPath(handle, stroke);
+
+    // ตัวถัง
+    final body = Path()
+      ..moveTo(w * 0.22, h * 0.25)
+      ..lineTo(w * 0.28, h * 0.88)
+      ..quadraticBezierTo(w * 0.28, h * 0.94, w * 0.36, h * 0.94)
+      ..lineTo(w * 0.64, h * 0.94)
+      ..quadraticBezierTo(w * 0.72, h * 0.94, w * 0.72, h * 0.88)
+      ..lineTo(w * 0.78, h * 0.25);
+    canvas.drawPath(body, stroke);
+
+    // เส้นแนวตั้งในตัวถัง
+    canvas.drawLine(
+        Offset(w * 0.42, h * 0.40), Offset(w * 0.42, h * 0.78), stroke);
+    canvas.drawLine(
+        Offset(w * 0.58, h * 0.40), Offset(w * 0.58, h * 0.78), stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _TrashCanVectorPainter old) =>
+      old.color != color;
 }

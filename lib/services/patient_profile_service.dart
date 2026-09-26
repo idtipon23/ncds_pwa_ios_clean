@@ -397,4 +397,34 @@ class PatientProfileService {
       throw Exception('ไม่สามารถอัปเดตข้อมูลได้: $e');
     }
   }
+  /// 🗑️ ลบข้อมูลผู้ป่วยแบบถาวร (Cascade Purge) และล้างความจำเครื่องทั้งหมด
+  Future<void> purgePatientDataAndSession(String patientId) async {
+    try {
+      // 1. ลบข้อมูลลูกทั้งหมดใน Supabase ที่ผูกกับ patient_id นี้
+      await Future.wait([
+        _supabase.from('vital_signs').delete().eq('patient_id', patientId),
+        _supabase.from('lab_results').delete().eq('patient_id', patientId),
+        _supabase.from('medication_logs').delete().eq('patient_id', patientId),
+        _supabase.from('medication_adherence_logs').delete().eq('patient_id', patientId),
+        _supabase.from('food_logs').delete().eq('patient_id', patientId),
+        _supabase.from('exercise_logs').delete().eq('patient_id', patientId),
+        _supabase.from('appointments').delete().eq('patient_id', patientId),
+      ]);
+
+      // 2. ลบแถวข้อมูลหลักในตาราง patients
+      await _supabase.from('patients').delete().eq('id', patientId);
+
+      // 3. กวาดล้าง SharedPreferences ทั้งหมดในเครื่อง (ตัดขาด Smart HN Memory ไม่ให้ Auto-login ได้อีก)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // 4. สั่ง Sign Out ออกจาก Supabase Auth
+      await _supabase.auth.signOut();
+      
+      debugPrint('✅ ลบข้อมูลผู้ป่วยและล้าง Session ในเครื่องสำเร็จ');
+    } catch (e) {
+      debugPrint('❌ Error in purgePatientDataAndSession: $e');
+      rethrow;
+    }
+  }
 }
