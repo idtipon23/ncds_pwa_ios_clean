@@ -404,10 +404,12 @@ class PatientDatabaseService {
           .from('lab_results')
           .select()
           .eq('patient_id', patientId)
+          // เรียงตาม test_date หรือถ้าไม่มีให้ fallback เป็น created_at/lab_date
           .order('test_date', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      throw Exception('ไม่สามารถดึงข้อมูลผลแล็บได้: $e');
+      debugPrint('⚠️ Error fetching labs: $e');
+      return [];
     }
   }
 
@@ -459,17 +461,25 @@ class PatientDatabaseService {
     String? imageUrl,
   }) async {
     try {
+      final nowUtc = DateTime.now().toUtc().toIso8601String();
       final Map<String, dynamic> data = {
         'patient_id': patientId,
-        'test_date': DateTime.now().toUtc().toIso8601String(),
+        'test_date': nowUtc,
+        'lab_date':
+            nowUtc.split('T').first, // 👈 รองรับฟิลด์ของ Staff Dashboard
       };
 
-      // Helper เช็คค่า > 0
       void addIfValid(String key, double? val) {
         if (val != null && val > 0) data[key] = val;
       }
 
-      addIfValid('total_cholesterol', totalCholesterol);
+      // บันทึกรองรับทั้ง 2 คอลัมน์
+      if (totalCholesterol != null && totalCholesterol > 0) {
+        data['total_cholesterol'] = totalCholesterol;
+        data['cholesterol'] =
+            totalCholesterol; // 👈 รองรับฟิลด์ของ Staff Dashboard
+      }
+
       addIfValid('hdl', hdl);
       addIfValid('ldl', ldl);
       addIfValid('triglyceride', triglyceride);
@@ -480,6 +490,12 @@ class PatientDatabaseService {
       addIfValid('egfr', egfr);
       addIfValid('sgpt', sgpt);
       addIfValid('uric_acid', uricAcid);
+      addIfValid('potassium', potassium);
+      addIfValid('sodium', sodium);
+      addIfValid('uacr', uacr);
+      if (urineProtein != null && urineProtein.isNotEmpty) {
+        data['urine_protein'] = urineProtein;
+      }
 
       if (imageUrl != null && imageUrl.isNotEmpty) {
         data['image_url'] = imageUrl;

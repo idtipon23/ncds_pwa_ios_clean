@@ -67,7 +67,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         minHeight: 1024,
       );
 
-      if (compressed.lengthInBytes > 0 && compressed.lengthInBytes < imageBytes.lengthInBytes) {
+      if (compressed.lengthInBytes > 0 &&
+          compressed.lengthInBytes < imageBytes.lengthInBytes) {
         return compressed;
       }
     } catch (e) {
@@ -102,7 +103,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('AI ไม่สามารถอ่านใบแล็บได้ กรุณาถ่ายภาพให้ชัดเจนขึ้น'),
+              content:
+                  Text('AI ไม่สามารถอ่านใบแล็บได้ กรุณาถ่ายภาพให้ชัดเจนขึ้น'),
               backgroundColor: Color(0xFFD97B4F),
             ),
           );
@@ -123,7 +125,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
   }
 
   // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก (ขยายรองรับ Electrolytes และ Uric Acid)
-  void _showConfirmLabDialog(Map<String, dynamic> labData, Uint8List imageBytes) {
+  void _showConfirmLabDialog(
+      Map<String, dynamic> labData, Uint8List imageBytes) {
     final double? tcVal = (labData['total_cholesterol'] as num?)?.toDouble();
     final double? hdlVal = (labData['hdl'] as num?)?.toDouble();
     final double? ldlVal = (labData['ldl'] as num?)?.toDouble();
@@ -134,15 +137,24 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     final double? naVal = (labData['sodium'] as num?)?.toDouble();
     final double? uaVal = (labData['uric_acid'] as num?)?.toDouble();
 
-    final tcCtrl = TextEditingController(text: (tcVal != null && tcVal > 0) ? tcVal.toString() : '');
-    final hdlCtrl = TextEditingController(text: (hdlVal != null && hdlVal > 0) ? hdlVal.toString() : '');
-    final ldlCtrl = TextEditingController(text: (ldlVal != null && ldlVal > 0) ? ldlVal.toString() : '');
-    final fbsCtrl = TextEditingController(text: (fbsVal != null && fbsVal > 0) ? fbsVal.toString() : '');
-    final crCtrl = TextEditingController(text: (crVal != null && crVal > 0) ? crVal.toString() : '');
-    final egfrCtrl = TextEditingController(text: (egfrVal != null && egfrVal > 0) ? egfrVal.toString() : '');
-    final kCtrl = TextEditingController(text: (kVal != null && kVal > 0) ? kVal.toString() : '');
-    final naCtrl = TextEditingController(text: (naVal != null && naVal > 0) ? naVal.toString() : '');
-    final uaCtrl = TextEditingController(text: (uaVal != null && uaVal > 0) ? uaVal.toString() : '');
+    final tcCtrl = TextEditingController(
+        text: (tcVal != null && tcVal > 0) ? tcVal.toString() : '');
+    final hdlCtrl = TextEditingController(
+        text: (hdlVal != null && hdlVal > 0) ? hdlVal.toString() : '');
+    final ldlCtrl = TextEditingController(
+        text: (ldlVal != null && ldlVal > 0) ? ldlVal.toString() : '');
+    final fbsCtrl = TextEditingController(
+        text: (fbsVal != null && fbsVal > 0) ? fbsVal.toString() : '');
+    final crCtrl = TextEditingController(
+        text: (crVal != null && crVal > 0) ? crVal.toString() : '');
+    final egfrCtrl = TextEditingController(
+        text: (egfrVal != null && egfrVal > 0) ? egfrVal.toString() : '');
+    final kCtrl = TextEditingController(
+        text: (kVal != null && kVal > 0) ? kVal.toString() : '');
+    final naCtrl = TextEditingController(
+        text: (naVal != null && naVal > 0) ? naVal.toString() : '');
+    final uaCtrl = TextEditingController(
+        text: (uaVal != null && uaVal > 0) ? uaVal.toString() : '');
 
     showDialog(
       context: context,
@@ -156,7 +168,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
             SizedBox(width: 8),
             Text(
               'ตรวจสอบผลตรวจเลือด (Lab)',
-              style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(
+                  color: primaryTextColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18),
             ),
           ],
         ),
@@ -187,8 +202,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 TextField(
                   controller: tcCtrl,
                   style: const TextStyle(color: primaryTextColor),
-                  decoration: _dialogInputDecoration('Total Cholesterol (mg/dL)'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                      _dialogInputDecoration('Total Cholesterol (mg/dL)'),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -198,7 +215,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                         controller: hdlCtrl,
                         style: const TextStyle(color: primaryTextColor),
                         decoration: _dialogInputDecoration('HDL (mg/dL)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -207,7 +225,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                         controller: ldlCtrl,
                         style: const TextStyle(color: primaryTextColor),
                         decoration: _dialogInputDecoration('LDL (mg/dL)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                   ],
@@ -221,8 +240,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                       child: TextField(
                         controller: fbsCtrl,
                         style: const TextStyle(color: primaryTextColor),
-                        decoration: _dialogInputDecoration('FBS น้ำตาล (mg/dL)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration:
+                            _dialogInputDecoration('FBS น้ำตาล (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -230,8 +251,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                       child: TextField(
                         controller: crCtrl,
                         style: const TextStyle(color: primaryTextColor),
-                        decoration: _dialogInputDecoration('Creatinine ไต (mg/dL)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration:
+                            _dialogInputDecoration('Creatinine ไต (mg/dL)'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                   ],
@@ -245,8 +268,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                       child: TextField(
                         controller: kCtrl,
                         style: const TextStyle(color: primaryTextColor),
-                        decoration: _dialogInputDecoration('Potassium K+ (mEq/L)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration:
+                            _dialogInputDecoration('Potassium K+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -254,8 +279,10 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                       child: TextField(
                         controller: naCtrl,
                         style: const TextStyle(color: primaryTextColor),
-                        decoration: _dialogInputDecoration('Sodium Na+ (mEq/L)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration:
+                            _dialogInputDecoration('Sodium Na+ (mEq/L)'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                   ],
@@ -270,7 +297,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                         controller: uaCtrl,
                         style: const TextStyle(color: primaryTextColor),
                         decoration: _dialogInputDecoration('Uric Acid (mg/dL)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -279,7 +307,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                         controller: egfrCtrl,
                         style: const TextStyle(color: primaryTextColor),
                         decoration: _dialogInputDecoration('eGFR (ml/min)'),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
                     ),
                   ],
@@ -291,12 +320,14 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
+            child:
+                const Text('ยกเลิก', style: TextStyle(color: mutedTextColor)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: emeraldTheme,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             ),
             onPressed: () async {
@@ -314,7 +345,9 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 imageBytes: imageBytes,
               );
             },
-            child: const Text('บันทึกผลแล็บ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('บันทึกผลแล็บ',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -360,9 +393,11 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     setState(() => _isLoading = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
-      if (patientId == null) throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
+      if (patientId == null)
+        throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
 
-      final imagePath = await _dbService.uploadLabImageBytes(imageBytes, patientId);
+      final imagePath =
+          await _dbService.uploadLabImageBytes(imageBytes, patientId);
 
       await _dbService.saveLabResult(
         patientId: patientId,
@@ -381,7 +416,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('บันทึกผลแล็บสำเร็จ! พร้อมนำไปประมวลผลความเสี่ยงและยา CDSS'),
+            content: Text(
+                'บันทึกผลแล็บสำเร็จ! พร้อมนำไปประมวลผลความเสี่ยงและยา CDSS'),
             backgroundColor: emeraldTheme,
           ),
         );
@@ -409,10 +445,14 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         elevation: 0,
         title: const Text(
           'ผลตรวจสุขภาพและแล็บ',
-          style: TextStyle(color: primaryTextColor, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+              color: primaryTextColor,
+              fontWeight: FontWeight.bold,
+              fontSize: 18),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: primaryTextColor),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: primaryTextColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -437,36 +477,60 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.science_rounded, size: 70, color: const Color(0xFFEADBCE)),
+                          Icon(Icons.science_rounded,
+                              size: 70, color: const Color(0xFFEADBCE)),
                           const SizedBox(height: 14),
                           const Text(
                             'ยังไม่มีประวัติผลตรวจแล็บ',
-                            style: TextStyle(fontSize: 16, color: secondaryTextColor),
+                            style: TextStyle(
+                                fontSize: 16, color: secondaryTextColor),
                           ),
                         ],
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 90),
+                      padding: const EdgeInsets.only(
+                          left: 16, right: 16, top: 16, bottom: 90),
                       itemCount: _labResults.length,
                       itemBuilder: (context, index) {
                         final lab = _labResults[index];
-                        final double? tcVal = (lab['total_cholesterol'] as num?)?.toDouble();
+
+// 1. ดึงวันที่ (รองรับทั้ง test_date ของ PWA และ lab_date จาก Staff Dashboard)
+                        final rawDate =
+                            (lab['test_date'] ?? lab['lab_date'])?.toString();
+                        final displayDate =
+                            (rawDate != null && rawDate.length >= 10)
+                                ? rawDate.substring(0, 10)
+                                : '-';
+
+// 2. ดึงค่าแล็บ (รองรับทั้ง total_cholesterol และ cholesterol จาก Dashboard)
+                        final double? tcVal = (lab['total_cholesterol'] ??
+                                lab['cholesterol'] as num?)
+                            ?.toDouble();
+                        final double? hba1cVal = (lab['hba1c'] as num?)
+                            ?.toDouble(); // 👈 ดึง HbA1c เพิ่มตรงนี้
                         final double? hdlVal = (lab['hdl'] as num?)?.toDouble();
                         final double? ldlVal = (lab['ldl'] as num?)?.toDouble();
-                        final double? fbsVal = (lab['fasting_blood_sugar'] as num?)?.toDouble();
-                        final double? crVal = (lab['creatinine'] as num?)?.toDouble();
-                        final double? egfrVal = (lab['egfr'] as num?)?.toDouble();
-                        final double? kVal = (lab['potassium'] as num?)?.toDouble();
-                        final double? naVal = (lab['sodium'] as num?)?.toDouble();
-                        final double? uaVal = (lab['uric_acid'] as num?)?.toDouble();
+                        final double? fbsVal =
+                            (lab['fasting_blood_sugar'] as num?)?.toDouble();
+                        final double? crVal =
+                            (lab['creatinine'] as num?)?.toDouble();
+                        final double? egfrVal =
+                            (lab['egfr'] as num?)?.toDouble();
+                        final double? kVal =
+                            (lab['potassium'] as num?)?.toDouble();
+                        final double? naVal =
+                            (lab['sodium'] as num?)?.toDouble();
+                        final double? uaVal =
+                            (lab['uric_acid'] as num?)?.toDouble();
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 14),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFFF0E5D8), width: 1.2),
+                            border: Border.all(
+                                color: const Color(0xFFF0E5D8), width: 1.2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.03),
@@ -481,11 +545,13 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     const Row(
                                       children: [
-                                        Icon(Icons.science_outlined, color: emeraldTheme, size: 20),
+                                        Icon(Icons.science_outlined,
+                                            color: emeraldTheme, size: 20),
                                         SizedBox(width: 8),
                                         Text(
                                           'ผลตรวจเลือด (Lab Report)',
@@ -498,34 +564,46 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                                       ],
                                     ),
                                     Text(
-                                      lab['test_date']?.toString().substring(0, 10) ?? '',
-                                      style: const TextStyle(fontSize: 12, color: mutedTextColor),
+                                      displayDate, // 👈 ใช้วันที่ displayDate ที่ fallback แล้ว
+                                      style: const TextStyle(
+                                          fontSize: 12, color: mutedTextColor),
                                     ),
                                   ],
                                 ),
-                                const Divider(height: 20, color: Color(0xFFF5ECE1)),
-                                _buildMetricRow('Total Cholesterol', tcVal, 'mg/dL'),
+                                const Divider(
+                                    height: 20, color: Color(0xFFF5ECE1)),
+                                _buildMetricRow(
+                                    'Total Cholesterol', tcVal, 'mg/dL'),
                                 const SizedBox(height: 6),
                                 _buildMetricRow('HDL', hdlVal, 'mg/dL'),
                                 const SizedBox(height: 6),
                                 _buildMetricRow('LDL', ldlVal, 'mg/dL'),
                                 const SizedBox(height: 6),
-                                _buildMetricRow('Fasting Blood Sugar', fbsVal, 'mg/dL'),
+                                _buildMetricRow(
+                                    'Fasting Blood Sugar', fbsVal, 'mg/dL'),
+                                if (hba1cVal != null && hba1cVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow(
+                                      'HbA1c (น้ำตาลสะสม)', hba1cVal, '%'),
+                                ],
                                 if (crVal != null && crVal > 0) ...[
                                   const SizedBox(height: 6),
                                   _buildMetricRow('Creatinine', crVal, 'mg/dL'),
                                 ],
                                 if (egfrVal != null && egfrVal > 0) ...[
                                   const SizedBox(height: 6),
-                                  _buildMetricRow('eGFR', egfrVal, 'ml/min/1.73m²'),
+                                  _buildMetricRow(
+                                      'eGFR', egfrVal, 'ml/min/1.73m²'),
                                 ],
                                 if (kVal != null && kVal > 0) ...[
                                   const SizedBox(height: 6),
-                                  _buildMetricRow('Potassium (K+)', kVal, 'mEq/L'),
+                                  _buildMetricRow(
+                                      'Potassium (K+)', kVal, 'mEq/L'),
                                 ],
                                 if (naVal != null && naVal > 0) ...[
                                   const SizedBox(height: 6),
-                                  _buildMetricRow('Sodium (Na+)', naVal, 'mEq/L'),
+                                  _buildMetricRow(
+                                      'Sodium (Na+)', naVal, 'mEq/L'),
                                 ],
                                 if (uaVal != null && uaVal > 0) ...[
                                   const SizedBox(height: 6),
@@ -555,7 +633,8 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: secondaryTextColor, fontSize: 13)),
+        Text(label,
+            style: const TextStyle(color: secondaryTextColor, fontSize: 13)),
         RichText(
           text: TextSpan(
             children: [
