@@ -127,15 +127,30 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
   // 3. Popup ยืนยันข้อมูลผลแล็บก่อนบันทึก (ขยายรองรับ Electrolytes และ Uric Acid)
   void _showConfirmLabDialog(
       Map<String, dynamic> labData, Uint8List imageBytes) {
-    final double? tcVal = (labData['total_cholesterol'] as num?)?.toDouble();
+    double? labNumber(String canonical, [String? legacy]) =>
+        ((labData[canonical] ?? (legacy == null ? null : labData[legacy]))
+                as num?)
+            ?.toDouble();
+
+    final double? tcVal = labNumber('total_cholesterol', 'cholesterol');
     final double? hdlVal = (labData['hdl'] as num?)?.toDouble();
     final double? ldlVal = (labData['ldl'] as num?)?.toDouble();
-    final double? fbsVal = (labData['fasting_blood_sugar'] as num?)?.toDouble();
+    final double? triglycerideVal = labNumber('triglyceride', 'triglycerides');
+    final double? fbsVal = labNumber('fasting_blood_sugar', 'fbs');
+    final double? hba1cVal = labNumber('hba1c');
     final double? crVal = (labData['creatinine'] as num?)?.toDouble();
+    final double? bunVal = labNumber('bun');
     final double? egfrVal = (labData['egfr'] as num?)?.toDouble();
     final double? kVal = (labData['potassium'] as num?)?.toDouble();
     final double? naVal = (labData['sodium'] as num?)?.toDouble();
     final double? uaVal = (labData['uric_acid'] as num?)?.toDouble();
+    final double? astVal = labNumber('ast');
+    final double? altVal = labNumber('alt', 'sgpt');
+    final double? alpVal = labNumber('alp');
+    final double? chlorideVal = labNumber('chloride');
+    final double? bicarbonateVal = labNumber('bicarbonate');
+    final double? uacrVal = labNumber('uacr', 'urine_microalbumin');
+    final urineProteinValue = (labData['urine_protein'] ?? '').toString();
 
     final tcCtrl = TextEditingController(
         text: (tcVal != null && tcVal > 0) ? tcVal.toString() : '');
@@ -143,10 +158,18 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         text: (hdlVal != null && hdlVal > 0) ? hdlVal.toString() : '');
     final ldlCtrl = TextEditingController(
         text: (ldlVal != null && ldlVal > 0) ? ldlVal.toString() : '');
+    final triglycerideCtrl = TextEditingController(
+        text: (triglycerideVal != null && triglycerideVal > 0)
+            ? triglycerideVal.toString()
+            : '');
     final fbsCtrl = TextEditingController(
         text: (fbsVal != null && fbsVal > 0) ? fbsVal.toString() : '');
+    final hba1cCtrl = TextEditingController(
+        text: (hba1cVal != null && hba1cVal > 0) ? hba1cVal.toString() : '');
     final crCtrl = TextEditingController(
         text: (crVal != null && crVal > 0) ? crVal.toString() : '');
+    final bunCtrl = TextEditingController(
+        text: (bunVal != null && bunVal > 0) ? bunVal.toString() : '');
     final egfrCtrl = TextEditingController(
         text: (egfrVal != null && egfrVal > 0) ? egfrVal.toString() : '');
     final kCtrl = TextEditingController(
@@ -155,6 +178,23 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         text: (naVal != null && naVal > 0) ? naVal.toString() : '');
     final uaCtrl = TextEditingController(
         text: (uaVal != null && uaVal > 0) ? uaVal.toString() : '');
+    final astCtrl = TextEditingController(
+        text: (astVal != null && astVal > 0) ? astVal.toString() : '');
+    final altCtrl = TextEditingController(
+        text: (altVal != null && altVal > 0) ? altVal.toString() : '');
+    final alpCtrl = TextEditingController(
+        text: (alpVal != null && alpVal > 0) ? alpVal.toString() : '');
+    final chlorideCtrl = TextEditingController(
+        text: (chlorideVal != null && chlorideVal > 0)
+            ? chlorideVal.toString()
+            : '');
+    final bicarbonateCtrl = TextEditingController(
+        text: (bicarbonateVal != null && bicarbonateVal > 0)
+            ? bicarbonateVal.toString()
+            : '');
+    final uacrCtrl = TextEditingController(
+        text: (uacrVal != null && uacrVal > 0) ? uacrVal.toString() : '');
+    final urineProteinCtrl = TextEditingController(text: urineProteinValue);
 
     showDialog(
       context: context,
@@ -233,6 +273,20 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 ),
                 const SizedBox(height: 10),
 
+                Row(
+                  children: [
+                    Expanded(
+                      child: _labNumberField(
+                          triglycerideCtrl, 'Triglyceride (mg/dL)'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _labNumberField(hba1cCtrl, 'HbA1c (%)'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
                 // น้ำตาลและไต
                 Row(
                   children: [
@@ -255,6 +309,51 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                             _dialogInputDecoration('Creatinine ไต (mg/dL)'),
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                Row(
+                  children: [
+                    Expanded(child: _labNumberField(bunCtrl, 'BUN (mg/dL)')),
+                    const SizedBox(width: 8),
+                    Expanded(child: _labNumberField(astCtrl, 'AST (U/L)')),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                        child: _labNumberField(altCtrl, 'ALT / SGPT (U/L)')),
+                    const SizedBox(width: 8),
+                    Expanded(child: _labNumberField(alpCtrl, 'ALP (U/L)')),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                        child:
+                            _labNumberField(chlorideCtrl, 'Chloride (mEq/L)')),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: _labNumberField(
+                            bicarbonateCtrl, 'Bicarbonate (mEq/L)')),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                        child: _labNumberField(uacrCtrl, 'UACR (mg/g Cr)')),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: urineProteinCtrl,
+                        style: const TextStyle(color: primaryTextColor),
+                        decoration: _dialogInputDecoration('Urine Protein'),
                       ),
                     ),
                   ],
@@ -336,12 +435,22 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                 totalCholesterol: double.tryParse(tcCtrl.text.trim()),
                 hdl: double.tryParse(hdlCtrl.text.trim()),
                 ldl: double.tryParse(ldlCtrl.text.trim()),
+                triglyceride: double.tryParse(triglycerideCtrl.text.trim()),
                 fastingBloodSugar: double.tryParse(fbsCtrl.text.trim()),
+                hba1c: double.tryParse(hba1cCtrl.text.trim()),
                 creatinine: double.tryParse(crCtrl.text.trim()),
+                bun: double.tryParse(bunCtrl.text.trim()),
                 egfr: double.tryParse(egfrCtrl.text.trim()),
                 potassium: double.tryParse(kCtrl.text.trim()),
                 sodium: double.tryParse(naCtrl.text.trim()),
                 uricAcid: double.tryParse(uaCtrl.text.trim()),
+                ast: double.tryParse(astCtrl.text.trim()),
+                alt: double.tryParse(altCtrl.text.trim()),
+                alp: double.tryParse(alpCtrl.text.trim()),
+                chloride: double.tryParse(chlorideCtrl.text.trim()),
+                bicarbonate: double.tryParse(bicarbonateCtrl.text.trim()),
+                uacr: double.tryParse(uacrCtrl.text.trim()),
+                urineProtein: urineProteinCtrl.text.trim(),
                 imageBytes: imageBytes,
               );
             },
@@ -377,24 +486,44 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
     );
   }
 
+  Widget _labNumberField(TextEditingController controller, String label) {
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: primaryTextColor),
+      decoration: _dialogInputDecoration(label),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    );
+  }
+
   // 4. บันทึกผลแล็บลง Database
   Future<void> _saveLabResult({
     double? totalCholesterol,
     double? hdl,
     double? ldl,
+    double? triglyceride,
     double? fastingBloodSugar,
+    double? hba1c,
     double? creatinine,
+    double? bun,
     double? egfr,
     double? potassium,
     double? sodium,
     double? uricAcid,
+    double? ast,
+    double? alt,
+    double? alp,
+    double? chloride,
+    double? bicarbonate,
+    double? uacr,
+    String? urineProtein,
     required Uint8List imageBytes,
   }) async {
     setState(() => _isLoading = true);
     try {
       final patientId = await _profileService.getCurrentPatientId();
-      if (patientId == null)
+      if (patientId == null) {
         throw Exception('ไม่พบรหัสผู้ป่วย กรุณาเข้าสู่ระบบใหม่');
+      }
 
       final imagePath =
           await _dbService.uploadLabImageBytes(imageBytes, patientId);
@@ -404,12 +533,22 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
         totalCholesterol: totalCholesterol,
         hdl: hdl,
         ldl: ldl,
+        triglyceride: triglyceride,
         fastingBloodSugar: fastingBloodSugar,
+        hba1c: hba1c,
         creatinine: creatinine,
+        bun: bun,
         egfr: egfr,
         potassium: potassium,
         sodium: sodium,
         uricAcid: uricAcid,
+        ast: ast,
+        sgpt: alt,
+        alp: alp,
+        chloride: chloride,
+        bicarbonate: bicarbonate,
+        uacr: uacr,
+        urineProtein: urineProtein,
         imageUrl: imagePath,
       );
 
@@ -509,12 +648,17 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                             ?.toDouble();
                         final double? hba1cVal = (lab['hba1c'] as num?)
                             ?.toDouble(); // 👈 ดึง HbA1c เพิ่มตรงนี้
+                        final double? triglycerideVal = ((lab['triglyceride'] ??
+                                lab['triglycerides']) as num?)
+                            ?.toDouble();
                         final double? hdlVal = (lab['hdl'] as num?)?.toDouble();
                         final double? ldlVal = (lab['ldl'] as num?)?.toDouble();
                         final double? fbsVal =
-                            (lab['fasting_blood_sugar'] as num?)?.toDouble();
+                            ((lab['fasting_blood_sugar'] ?? lab['fbs']) as num?)
+                                ?.toDouble();
                         final double? crVal =
                             (lab['creatinine'] as num?)?.toDouble();
+                        final double? bunVal = (lab['bun'] as num?)?.toDouble();
                         final double? egfrVal =
                             (lab['egfr'] as num?)?.toDouble();
                         final double? kVal =
@@ -523,6 +667,19 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                             (lab['sodium'] as num?)?.toDouble();
                         final double? uaVal =
                             (lab['uric_acid'] as num?)?.toDouble();
+                        final double? astVal = (lab['ast'] as num?)?.toDouble();
+                        final double? altVal =
+                            ((lab['alt'] ?? lab['sgpt']) as num?)?.toDouble();
+                        final double? alpVal = (lab['alp'] as num?)?.toDouble();
+                        final double? chlorideVal =
+                            (lab['chloride'] as num?)?.toDouble();
+                        final double? bicarbonateVal =
+                            (lab['bicarbonate'] as num?)?.toDouble();
+                        final double? uacrVal =
+                            ((lab['uacr'] ?? lab['urine_microalbumin']) as num?)
+                                ?.toDouble();
+                        final String? urineProteinVal =
+                            (lab['urine_protein'] as String?)?.trim();
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 14),
@@ -586,6 +743,16 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                                   _buildMetricRow(
                                       'HbA1c (น้ำตาลสะสม)', hba1cVal, '%'),
                                 ],
+                                if (triglycerideVal != null &&
+                                    triglycerideVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow(
+                                      'Triglyceride', triglycerideVal, 'mg/dL'),
+                                ],
+                                if (bunVal != null && bunVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('BUN', bunVal, 'mg/dL'),
+                                ],
                                 if (crVal != null && crVal > 0) ...[
                                   const SizedBox(height: 6),
                                   _buildMetricRow('Creatinine', crVal, 'mg/dL'),
@@ -608,6 +775,39 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
                                 if (uaVal != null && uaVal > 0) ...[
                                   const SizedBox(height: 6),
                                   _buildMetricRow('Uric Acid', uaVal, 'mg/dL'),
+                                ],
+                                if (astVal != null && astVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('AST', astVal, 'U/L'),
+                                ],
+                                if (altVal != null && altVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('ALT / SGPT', altVal, 'U/L'),
+                                ],
+                                if (alpVal != null && alpVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('ALP', alpVal, 'U/L'),
+                                ],
+                                if (chlorideVal != null && chlorideVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow(
+                                      'Chloride', chlorideVal, 'mEq/L'),
+                                ],
+                                if (bicarbonateVal != null &&
+                                    bicarbonateVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow(
+                                      'Bicarbonate', bicarbonateVal, 'mEq/L'),
+                                ],
+                                if (uacrVal != null && uacrVal > 0) ...[
+                                  const SizedBox(height: 6),
+                                  _buildMetricRow('UACR', uacrVal, 'mg/g Cr'),
+                                ],
+                                if (urineProteinVal != null &&
+                                    urineProteinVal.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  _buildTextMetricRow(
+                                      'Urine Protein', urineProteinVal),
                                 ],
                               ],
                             ),
@@ -653,6 +853,21 @@ class _LabResultsScreenState extends State<LabResultsScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildTextMetricRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: const TextStyle(color: secondaryTextColor, fontSize: 13)),
+        Text(value,
+            style: const TextStyle(
+                color: primaryTextColor,
+                fontSize: 14,
+                fontWeight: FontWeight.bold)),
       ],
     );
   }

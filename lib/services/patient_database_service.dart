@@ -404,8 +404,7 @@ class PatientDatabaseService {
           .from('lab_results')
           .select()
           .eq('patient_id', patientId)
-          // เรียงตาม test_date หรือถ้าไม่มีให้ fallback เป็น created_at/lab_date
-          .order('test_date', ascending: false);
+          .order('test_date', ascending: false, nullsFirst: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       debugPrint('⚠️ Error fetching labs: $e');
@@ -457,6 +456,10 @@ class PatientDatabaseService {
     double? potassium, // 👈 เพิ่ม K+
     double? sodium, // 👈 เพิ่ม Na+
     double? uacr, // 👈 เพิ่ม UACR
+    double? ast,
+    double? alp,
+    double? chloride,
+    double? bicarbonate,
     String? urineProtein, // 👈 เพิ่ม โปรตีนในปัสสาวะ
     String? imageUrl,
   }) async {
@@ -473,7 +476,8 @@ class PatientDatabaseService {
         if (val != null && val > 0) data[key] = val;
       }
 
-      // บันทึกรองรับทั้ง 2 คอลัมน์
+      // Canonical keys are fasting_blood_sugar, triglyceride, alt, and uacr;
+      // legacy aliases stay dual-written for the staff dashboard.
       if (totalCholesterol != null && totalCholesterol > 0) {
         data['total_cholesterol'] = totalCholesterol;
         data['cholesterol'] =
@@ -482,17 +486,33 @@ class PatientDatabaseService {
 
       addIfValid('hdl', hdl);
       addIfValid('ldl', ldl);
-      addIfValid('triglyceride', triglyceride);
-      addIfValid('fasting_blood_sugar', fastingBloodSugar);
+      if (triglyceride != null && triglyceride > 0) {
+        data['triglyceride'] = triglyceride;
+        data['triglycerides'] = triglyceride;
+      }
+      if (fastingBloodSugar != null && fastingBloodSugar > 0) {
+        data['fasting_blood_sugar'] = fastingBloodSugar;
+        data['fbs'] = fastingBloodSugar;
+      }
       addIfValid('hba1c', hba1c);
       addIfValid('creatinine', creatinine);
       addIfValid('bun', bun);
       addIfValid('egfr', egfr);
-      addIfValid('sgpt', sgpt);
+      if (sgpt != null && sgpt > 0) {
+        data['alt'] = sgpt;
+        data['sgpt'] = sgpt;
+      }
+      addIfValid('ast', ast);
+      addIfValid('alp', alp);
+      addIfValid('chloride', chloride);
+      addIfValid('bicarbonate', bicarbonate);
       addIfValid('uric_acid', uricAcid);
       addIfValid('potassium', potassium);
       addIfValid('sodium', sodium);
-      addIfValid('uacr', uacr);
+      if (uacr != null && uacr > 0) {
+        data['uacr'] = uacr;
+        data['urine_microalbumin'] = uacr;
+      }
       if (urineProtein != null && urineProtein.isNotEmpty) {
         data['urine_protein'] = urineProtein;
       }
